@@ -7,7 +7,7 @@ import { UploadCloud } from "lucide-react"
 
 export function FileDrop({
   onFile,
-  accept = "image/*",
+  accept = "image/*,application/pdf",
   label,
 }: {
   onFile: (file: File) => void
@@ -43,7 +43,7 @@ export function FileDrop({
           <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()}>
             Select file
           </Button>
-          <p className="text-xs text-muted-foreground">Supports JPG, JPEG, PNG • Max ~5MB</p>
+          <p className="text-xs text-muted-foreground">Supports JPG, JPEG, PNG, PDF • Max ~5MB</p>
         </div>
         <input
           ref={inputRef}

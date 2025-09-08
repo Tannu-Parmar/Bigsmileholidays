@@ -51,12 +51,16 @@ export async function POST(req: NextRequest) {
     const form = await req.formData()
     const type = (form.get("type") as DocType) || "passport_front"
     const file = form.get("file") as File | null
+    const imageUrl = (form.get("imageUrl") as string) || (form.get("previewUrl") as string) || ""
 
-    if (!file) return Response.json({ error: "Missing file" }, { status: 400 })
+    if (!file && !imageUrl) return Response.json({ error: "Missing file or imageUrl" }, { status: 400 })
 
-    const arrayBuf = await file.arrayBuffer()
-    const base64 = Buffer.from(arrayBuf).toString("base64")
-    const dataUrl = `data:${file.type};base64,${base64}`
+    let dataUrl = imageUrl
+    if (!dataUrl && file) {
+      const arrayBuf = await file.arrayBuffer()
+      const base64 = Buffer.from(arrayBuf).toString("base64")
+      dataUrl = `data:${file.type};base64,${base64}`
+    }
 
     const schema = DOC_SCHEMAS[type]
     const { object } = await generateObject({

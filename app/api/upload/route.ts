@@ -14,9 +14,17 @@ export async function POST(req: NextRequest) {
     const base64 = Buffer.from(arrayBuffer).toString("base64")
     const dataUri = `data:${file.type};base64,${base64}`
 
-    const uploaded = await cloudinary.uploader.upload(dataUri, { folder })
+    const isPdf = file.type === "application/pdf"
+    const uploaded = await cloudinary.uploader.upload(dataUri, { folder, resource_type: "auto" })
 
-    return Response.json({ url: uploaded.secure_url, publicId: uploaded.public_id })
+    let previewUrl = uploaded.secure_url
+    if (isPdf || uploaded.format === "pdf") {
+      try {
+        previewUrl = cloudinary.url(uploaded.public_id, { resource_type: "image", format: "jpg", page: 1, secure: true })
+      } catch {}
+    }
+
+    return Response.json({ url: uploaded.secure_url, publicId: uploaded.public_id, previewUrl, isPdf })
   } catch (e: any) {
     console.error("[v0] upload error:", e?.message)
     return Response.json({ error: "Upload failed" }, { status: 500 })
