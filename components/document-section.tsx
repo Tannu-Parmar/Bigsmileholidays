@@ -162,12 +162,42 @@ export function DocumentSection({
         const clsJson = await clsRes.json()
         if (clsRes.ok) {
           if (Array.isArray(clsJson?.results) && clsJson.results.length) {
-            const results = clsJson.results as any[]
+            const results = (clsJson.results as any[]).filter(Boolean)
+
+            // Prefer exact type match with highest confidence
             const matching = results
               .filter((r) => r?.type === type)
               .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-            const bestOverall = [...results].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0]
-            const chosen = matching[0] || bestOverall
+
+            let chosen = matching[0]
+
+            if (!chosen && results.length >= 2 && (type === "passport_front" || type === "passport_back")) {
+              // If one page is front and the other is back, pick the correct one deterministically
+              const frontCandidate = [...results]
+                .filter((r) => r?.type === "passport_front")
+                .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0]
+              const backCandidate = [...results]
+                .filter((r) => r?.type === "passport_back")
+                .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0]
+
+              if (type === "passport_front" && frontCandidate) chosen = frontCandidate
+              if (type === "passport_back" && backCandidate) chosen = backCandidate
+
+              // If both pages classified identically (both front or both back), tie-break by page number:
+              if (!chosen) {
+                const byConfidence = [...results].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+                const page1 = byConfidence.find((r) => r?.page === 1)
+                const page2 = byConfidence.find((r) => r?.page === 2)
+                if (type === "passport_front") chosen = page1 || byConfidence[0]
+                if (type === "passport_back") chosen = page2 || byConfidence[0]
+              }
+            }
+
+            // Final fallback: highest confidence overall
+            if (!chosen) {
+              chosen = [...results].sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0]
+            }
+
             detectedType = chosen?.type || null
             detectedPageUrl = chosen?.pageImageUrl || null
           } else if (clsJson?.type) {
