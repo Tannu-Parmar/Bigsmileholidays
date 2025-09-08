@@ -13,37 +13,74 @@ if (!apiKey) {
 const openai = createOpenAI({ apiKey })
 
 const DOC_TYPES = ["passport_front", "passport_back", "aadhar", "pan", "unknown"] as const
+// Helpers to normalize model outputs into our strict domain types
+function normalizeDocType(raw: unknown): (typeof DOC_TYPES)[number] {
+	const value = String(raw || "").toLowerCase().trim()
+	const compact = value.replace(/[^a-z0-9]+/g, "_")
+	if (compact.includes("aadhaar") || compact.includes("aadhar")) return "aadhar"
+	if (compact.includes("pan")) return "pan"
+	if (compact.includes("passport") && (compact.includes("front") || compact.includes("bio") || compact.includes("mrz"))) {
+		return "passport_front"
+	}
+	if (compact.includes("passport") && (compact.includes("back") || compact.includes("address") || compact.includes("rear"))) {
+		return "passport_back"
+	}
+	if ((DOC_TYPES as readonly string[]).includes(compact)) return compact as (typeof DOC_TYPES)[number]
+	return "unknown"
+}
+
+function normalizeConfidence(raw: unknown): number {
+	let n = Number(raw)
+	if (!Number.isFinite(n)) return 0.5
+	// Handle percentages like 86 -> 0.86
+	if (n > 1 && n <= 100) n = n / 100
+	if (n < 0) n = 0
+	if (n > 1) n = 1
+	return n
+}
+
 const CLASSIFY_SCHEMA = z.object({
-	type: z.enum(DOC_TYPES),
-	confidence: z.number().min(0).max(1),
+	type: z.string().transform(normalizeDocType),
+	confidence: z.coerce.number().transform(normalizeConfidence),
 })
 
+// Keep the explicit DocType for downstream typing clarity
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 type DocType = (typeof DOC_TYPES)[number]
 
 async function classifyImageByUrl(imageUrl: string) {
-	const { object } = await generateObject({
-		model: openai("gpt-4o-mini"),
-		schema: CLASSIFY_SCHEMA,
-		messages: [
-			{
-				role: "system",
-				content:
-					"You are a careful document classifier for Indian KYC documents. Classify the provided image strictly as one of: passport_front, passport_back, aadhar, pan, or unknown. Return a confidence between 0 and 1.",
-			},
-			{
-				role: "user",
-				content: [
-					{
-						type: "text",
-						text:
-							"Classify this document. Guidelines: passport_front = passport biodata page with photo and MRZ (two lines of < at bottom). passport_back = address/family details page of passport, typically without MRZ. aadhar = Aadhaar card with UIDAI branding and 12-digit number. pan = PAN card with 10-character alphanumeric (ABCDE1234F) and Income Tax Dept.",
-					},
-					{ type: "image", image: imageUrl },
-				],
-			},
-		],
-	})
-	return object as { type: DocType; confidence: number }
+	try {
+		const { object } = await generateObject({
+			model: openai("gpt-4o-mini"),
+			schema: CLASSIFY_SCHEMA,
+			temperature: 0,
+			messages: [
+				{
+					role: "system",
+					content:
+						"You are a careful document classifier for Indian KYC documents. Classify the provided image strictly as one of: passport_front, passport_back, aadhar, pan, or unknown. Return a numeric confidence between 0 and 1.",
+				},
+				{
+					role: "user",
+					content: [
+						{
+							type: "text",
+							text:
+								"Classify this document. Guidelines: passport_front = passport biodata page with photo and MRZ (two lines of < at bottom). passport_back = address/family details page of passport, typically without MRZ. aadhar = Aadhaar card with UIDAI branding and 12-digit number. pan = PAN card with 10-character alphanumeric (ABCDE1234F) and Income Tax Dept.",
+						},
+						{ type: "image", image: imageUrl },
+					],
+				},
+			],
+		})
+		return object as { type: DocType; confidence: number }
+	} catch (e: any) {
+		// If the model responded but failed schema validation, fall back to unknown instead of 500s
+		if (e?.name === "AI_NoObjectGeneratedError" || /did not match schema/i.test(String(e?.message))) {
+			return { type: "unknown" as DocType, confidence: 0 }
+		}
+		throw e
+	}
 }
 
 // Resiliency helpers

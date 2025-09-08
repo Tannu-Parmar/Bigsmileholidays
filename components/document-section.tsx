@@ -180,7 +180,7 @@ export function DocumentSection({
       if (detectedPageUrl) setImageUrl(detectedPageUrl)
 
       // If we found pages but none matched the current section, warn and skip
-      if (detectedType && detectedType !== type) {
+      if (detectedType && detectedType !== "unknown" && detectedType !== type) {
         toast({ title: "Detected different document", description: `Detected ${labelize(detectedType.replace(/_/g, " "))}. Switch to that section for best results.`, variant: "destructive" })
         return
       }

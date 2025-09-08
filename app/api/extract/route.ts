@@ -12,6 +12,9 @@ const openai = createOpenAI({ apiKey })
 const DOC_SCHEMAS = {
   passport_front: z.object({
     passportNumber: z.string().optional(),
+    // Explicitly capture raw fields visible on the passport UI
+    givenNames: z.string().optional(),
+    surname: z.string().optional(),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     nationality: z.string().optional(),
@@ -49,7 +52,7 @@ type DocType = keyof typeof DOC_SCHEMAS
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData()
-    const type = (form.get("type") as DocType) || "passport_front"
+    const type = (form.get("type") as keyof typeof DOC_SCHEMAS) || "passport_front"
     const file = form.get("file") as File | null
     const imageUrl = (form.get("imageUrl") as string) || (form.get("previewUrl") as string) || ""
 
@@ -66,11 +69,12 @@ export async function POST(req: NextRequest) {
     const { object } = await generateObject({
       model: openai("gpt-4o-mini"),
       schema,
+      temperature: 0,
       messages: [
         {
           role: "system",
           content:
-            "You are a precise OCR assistant. Extract only clean text for the requested fields. Use yyyy-mm-dd for dates when visible. Omit fields you cannot find.",
+            "You are a precise OCR assistant. Extract only clean text for the requested fields. Use yyyy-mm-dd for dates when visible. Omit fields you cannot find. For Indian passports: 'surname' is the top-right Surname label and is the lastName; 'givenNames' is the Given Names line; set firstName to the first token of 'givenNames'.",
         },
         {
           role: "user",
@@ -82,7 +86,24 @@ export async function POST(req: NextRequest) {
       ],
     })
 
-    return Response.json({ data: object })
+    // Normalize names for passports so UI fields auto-fill correctly
+    const data: Record<string, any> = { ...(object as any) }
+    if (type === "passport_front") {
+      const rawGiven = String(data.givenNames || data.firstName || "").trim()
+      const rawSurname = String(data.surname || data.lastName || "").trim()
+
+      if (rawGiven) {
+        const tokens = rawGiven.split(/\s+/).filter(Boolean)
+        if (tokens.length > 0) {
+          data.firstName = tokens[0]
+        }
+      }
+      if (rawSurname) {
+        data.lastName = rawSurname
+      }
+    }
+
+    return Response.json({ data })
   } catch (err: any) {
     console.error("[v0] extract error:", err?.message)
     return Response.json({ error: "Extraction failed" }, { status: 500 })
