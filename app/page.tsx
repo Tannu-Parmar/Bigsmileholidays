@@ -50,8 +50,7 @@ export default function HomePage() {
       // }
 
       toast({ title: "Saved", description: "Record stored; images removed." })
-      // Append to Excel by regenerating it from DB (includes this new record)
-      window.location.href = "/api/export"
+      // Excel master file is saved automatically. Use Export button when needed.
     } catch (e: any) {
       toast({ title: "Submit failed", description: e?.message || "Try again.", variant: "destructive" })
     } finally {
@@ -69,9 +68,9 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <h1 className="text-xl md:text-2xl font-semibold text-balance">Document OCR Uploader</h1>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => (window.location.href = "/api/export")}>
+            <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export") }>
               <FileSpreadsheet className="h-4 w-4 mr-2" />
-              Download Excel
+              Open Spreadsheet
             </Button>
             <Button onClick={handleSubmit} disabled={submitting}>
               <Send className="h-4 w-4 mr-2" />
@@ -105,7 +104,7 @@ export default function HomePage() {
           <CardContent className="py-4 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Tip: You can export Excel anytime.</span>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => (window.location.href = "/api/export")}>
+              <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export")}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Export Excel
               </Button>

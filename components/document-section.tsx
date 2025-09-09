@@ -340,22 +340,29 @@ export function DocumentSection({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {FIELDS[type].map((k) => (
               <div key={k} className="space-y-2">
-                <Label htmlFor={`${type}-${k}`}>{labelize(k)}</Label>
-                {isTextarea(k) ? (
-                  <Textarea
-                    id={`${type}-${k}`}
-                    value={value?.[k] || ""}
-                    onChange={(e) => onChange({ ...value, [k]: e.target.value })}
-                    placeholder={`Enter ${labelize(k).toLowerCase()}`}
-                  />
-                ) : (
-                  <Input
-                    id={`${type}-${k}`}
-                    value={value?.[k] || ""}
-                    onChange={(e) => onChange({ ...value, [k]: e.target.value })}
-                    placeholder={`Enter ${labelize(k).toLowerCase()}`}
-                  />
-                )}
+                {(() => {
+                  const fieldId = `${type}-${k}`
+                  return (
+                    <>
+                      <Label htmlFor={fieldId}>{labelize(k)}</Label>
+                      {isTextarea(k) ? (
+                        <Textarea
+                          id={fieldId}
+                          value={value?.[k] || ""}
+                          onChange={(e) => onChange({ ...value, [k]: e.target.value })}
+                          placeholder={`Enter ${labelize(k).toLowerCase()}`}
+                        />
+                      ) : (
+                        <Input
+                          id={fieldId}
+                          value={value?.[k] || ""}
+                          onChange={(e) => onChange({ ...value, [k]: e.target.value })}
+                          placeholder={`Enter ${labelize(k).toLowerCase()}`}
+                        />
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             ))}
           </div>

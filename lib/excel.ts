@@ -10,10 +10,9 @@ const EXCEL_PATH = path.join(DATA_DIR, "records.xlsx")
 
 export const HEADERS = [
 	"Sequence",
-	// Passport Front
-	"Passport Number",
 	"First Name",
 	"Last Name",
+	"Passport Number",
 	"Nationality",
 	"Sex",
 	"Date Of Birth (Passport)",
@@ -21,25 +20,23 @@ export const HEADERS = [
 	"Place Of Issue",
 	"Date Of Issue",
 	"Date Of Expiry",
-	"ImageUrl",
-	// Passport Back
 	"Father Name",
 	"Mother Name",
 	"Spouse Name",
-	"Passport Address",
-	"ImageUrl",
-	// Aadhar
 	"Aadhaar Number",
 	"Aadhaar Name",
 	"Aadhaar Date Of Birth",
 	"Aadhaar Gender",
-	"ImageUrl",
-	// PAN
+	"Aadhaar Address",
 	"PAN Number",
 	"PAN Name",
 	"PAN Father Name",
 	"PAN Date Of Birth",
-	"ImageUrl",
+	"Passport Address",
+	"Passport Front Image URL",
+	"Passport Back Image URL",
+	"Aadhaar Image URL",
+	"PAN Image URL",
 ]
 
 function ensureWorkbook(): { wb: XLSX.WorkBook; ws: XLSX.WorkSheet } {
@@ -58,7 +55,9 @@ function ensureWorkbook(): { wb: XLSX.WorkBook; ws: XLSX.WorkSheet } {
 	const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
 	const hasHeader = rows.length > 0 && JSON.stringify(rows[0]) === JSON.stringify(HEADERS)
 	if (!hasHeader) {
-		const newWs = XLSX.utils.aoa_to_sheet([HEADERS, ...rows])
+		// Rebuild sheet with the new HEADERS; drop the previous first row (assumed old header)
+		const dataRows = rows.length > 0 ? rows.slice(1) : []
+		const newWs = XLSX.utils.aoa_to_sheet([HEADERS, ...dataRows])
 		wb.Sheets[wb.SheetNames[0]] = newWs
 		const buf2 = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
 		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf2))
@@ -76,9 +75,9 @@ export function appendRowFromDocument(doc: DocumentSet) {
 
 		const row = [
 			seq,
-			doc.passport_front?.passportNumber || "",
 			doc.passport_front?.firstName || "",
 			doc.passport_front?.lastName || "",
+			doc.passport_front?.passportNumber || "",
 			doc.passport_front?.nationality || "",
 			doc.passport_front?.sex || "",
 			doc.passport_front?.dateOfBirth || "",
@@ -86,21 +85,22 @@ export function appendRowFromDocument(doc: DocumentSet) {
 			doc.passport_front?.placeOfIssue || "",
 			doc.passport_front?.dateOfIssue || "",
 			doc.passport_front?.dateOfExpiry || "",
-			doc.passport_front?.imageUrl || "",
 			doc.passport_back?.fatherName || "",
 			doc.passport_back?.motherName || "",
 			doc.passport_back?.spouseName || "",
-			doc.passport_back?.address || "",
-			doc.passport_back?.imageUrl || "",
 			doc.aadhar?.aadhaarNumber || "",
 			doc.aadhar?.name || "",
 			doc.aadhar?.dateOfBirth || "",
 			doc.aadhar?.gender || "",
-			doc.aadhar?.imageUrl || "",
+			doc.aadhar?.address || "",
 			doc.pan?.panNumber || "",
 			doc.pan?.name || "",
 			doc.pan?.fatherName || "",
 			doc.pan?.dateOfBirth || "",
+			doc.passport_back?.address || "",
+			doc.passport_front?.imageUrl || "",
+			doc.passport_back?.imageUrl || "",
+			doc.aadhar?.imageUrl || "",
 			doc.pan?.imageUrl || "",
 		]
 
@@ -125,38 +125,43 @@ export function buildExcelBufferFromDocuments(documents: DocumentSet[]): Buffer 
 	const rows: any[][] = [HEADERS]
 
 	documents.forEach((doc, index) => {
-		rows.push([
-			index + 1,
-			doc.passport_front?.passportNumber || "",
-			doc.passport_front?.firstName || "",
-			doc.passport_front?.lastName || "",
-			doc.passport_front?.nationality || "",
-			doc.passport_front?.sex || "",
-			doc.passport_front?.dateOfBirth || "",
-			doc.passport_front?.placeOfBirth || "",
-			doc.passport_front?.placeOfIssue || "",
-			doc.passport_front?.dateOfIssue || "",
-			doc.passport_front?.dateOfExpiry || "",
-			doc.passport_front?.imageUrl || "",
-			doc.passport_back?.fatherName || "",
-			doc.passport_back?.motherName || "",
-			doc.passport_back?.spouseName || "",
-			doc.passport_back?.address || "",
-			doc.passport_back?.imageUrl || "",
-			doc.aadhar?.aadhaarNumber || "",
-			doc.aadhar?.name || "",
-			doc.aadhar?.dateOfBirth || "",
-			doc.aadhar?.gender || "",
-			doc.aadhar?.imageUrl || "",
-			doc.pan?.panNumber || "",
-			doc.pan?.name || "",
-			doc.pan?.fatherName || "",
-			doc.pan?.dateOfBirth || "",
-			doc.pan?.imageUrl || "",
-		])
+		rows.push(buildRowFromDocument(doc as any, index + 1))
 	})
 
 	const ws = XLSX.utils.aoa_to_sheet(rows)
 	XLSX.utils.book_append_sheet(wb, ws, "records")
 	return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
+}
+
+export function buildRowFromDocument(doc: DocumentSet, sequence: number) {
+	return [
+		sequence,
+		doc.passport_front?.firstName || "",
+		doc.passport_front?.lastName || "",
+		doc.passport_front?.passportNumber || "",
+		doc.passport_front?.nationality || "",
+		doc.passport_front?.sex || "",
+		doc.passport_front?.dateOfBirth || "",
+		doc.passport_front?.placeOfBirth || "",
+		doc.passport_front?.placeOfIssue || "",
+		doc.passport_front?.dateOfIssue || "",
+		doc.passport_front?.dateOfExpiry || "",
+		doc.passport_back?.fatherName || "",
+		doc.passport_back?.motherName || "",
+		doc.passport_back?.spouseName || "",
+		doc.aadhar?.aadhaarNumber || "",
+		doc.aadhar?.name || "",
+		doc.aadhar?.dateOfBirth || "",
+		doc.aadhar?.gender || "",
+		doc.aadhar?.address || "",
+		doc.pan?.panNumber || "",
+		doc.pan?.name || "",
+		doc.pan?.fatherName || "",
+		doc.pan?.dateOfBirth || "",
+		doc.passport_back?.address || "",
+		doc.passport_front?.imageUrl || "",
+		doc.passport_back?.imageUrl || "",
+		doc.aadhar?.imageUrl || "",
+		doc.pan?.imageUrl || "",
+	]
 } 
