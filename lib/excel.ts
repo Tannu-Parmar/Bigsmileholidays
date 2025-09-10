@@ -10,7 +10,7 @@ const EXCEL_PATH = path.join(DATA_DIR, "records.xlsx")
 
 export const HEADERS = [
 	"Sequence",
-	"First Name",
+	"Full Name",
 	"Last Name",
 	"Passport Number",
 	"Nationality",

@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       if (rawGiven) {
         const tokens = rawGiven.split(/\s+/).filter(Boolean)
         if (tokens.length > 0) {
-          data.firstName = tokens[0]
+          data.firstName = rawGiven
         }
       }
       if (rawSurname) {
