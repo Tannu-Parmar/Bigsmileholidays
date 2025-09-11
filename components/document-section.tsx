@@ -365,6 +365,30 @@ export function DocumentSection({
                 })()}
               </div>
             ))}
+            {type === "pan" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="pan-mobileNumber">Mobile Number</Label>
+                  <Input
+                    id="pan-mobileNumber"
+                    type="tel"
+                    value={value?.mobileNumber || ""}
+                    onChange={(e) => onChange({ ...value, mobileNumber: e.target.value })}
+                    placeholder="Enter mobile number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pan-email">Email</Label>
+                  <Input
+                    id="pan-email"
+                    type="email"
+                    value={value?.email || ""}
+                    onChange={(e) => onChange({ ...value, email: e.target.value })}
+                    placeholder="Enter email"
+                  />
+                </div>
+              </>
+            ) : null}
           </div>
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

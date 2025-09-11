@@ -49,6 +49,8 @@ const PanSchema = new Schema(
     fatherName: String,
     dateOfBirth: String,
     imageUrl: String,
+    email: String,
+    mobileNumber: String,
   },
   { _id: false },
 )
