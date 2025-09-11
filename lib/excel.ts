@@ -11,7 +11,7 @@ const EXCEL_PATH = path.join(DATA_DIR, "records.xlsx")
 export const HEADERS = [
 	"Sequence",
 	"Aadhaar Name",
-	"Full Name",
+	"Full Name (Passport)",
 	"Last Name",
 	"Passport Number",
 	"Nationality",
