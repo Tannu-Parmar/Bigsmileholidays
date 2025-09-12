@@ -38,7 +38,20 @@ const FIELDS: Record<DocType, string[]> = {
     "dateOfIssue",
     "dateOfExpiry",
   ],
-  passport_back: ["fatherName", "motherName", "spouseName", "address"],
+  passport_back: [
+    "fatherName",
+    "motherName",
+    "spouseName",
+    "address",
+    "mobileNumber",
+    "email",
+    "ref",
+    "ff6E",
+    "ffEK",
+    "ffEY",
+    "ffSQ",
+    "ffAI",
+  ],
   aadhar: ["aadhaarNumber", "name", "dateOfBirth", "gender", "address"],
   pan: ["panNumber", "name", "fatherName", "dateOfBirth"],
 }
@@ -50,6 +63,38 @@ function labelize(s: string) {
     .replace(/\b\w/g, (m) => m.toUpperCase())
 }
 const isTextarea = (k: string) => /address/i.test(k)
+
+// Custom labels to match exact UI requirements
+const CUSTOM_LABELS: Record<string, string> = {
+  ref: "Reference",
+  ff6E: "FF 6E",
+  ffEK: "FF EK",
+  ffEY: "FF EY",
+  ffSQ: "FF SQ",
+  ffAI: "FF AI",
+}
+
+function displayLabel(key: string) {
+  return CUSTOM_LABELS[key] ?? labelize(key)
+}
+
+// Manual-only fields must not be auto-filled by extraction
+const MANUAL_ONLY_FIELDS: Record<DocType, Set<string>> = {
+  passport_front: new Set<string>([]),
+  passport_back: new Set<string>(["mobileNumber", "email", "ref", "ff6E", "ffEK", "ffEY", "ffSQ", "ffAI"]),
+  aadhar: new Set<string>([]),
+  pan: new Set<string>([]),
+}
+
+function stripManualOnly(type: DocType, data: AnyObj | null | undefined): AnyObj {
+  const blocked = MANUAL_ONLY_FIELDS[type]
+  if (!data || !blocked?.size) return data || {}
+  const cleaned: AnyObj = {}
+  for (const [k, v] of Object.entries(data)) {
+    if (!blocked.has(k)) cleaned[k] = v
+  }
+  return cleaned
+}
 
 export function DocumentSection({
   type,
@@ -227,7 +272,8 @@ export function DocumentSection({
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || "Extraction failed")
 
-      onChange({ ...value, ...(json?.data || {}), imageUrl: upJson.previewUrl || upJson.url, publicId: upJson.publicId })
+      const extracted = stripManualOnly(type, json?.data)
+      onChange({ ...value, ...extracted, imageUrl: upJson.previewUrl || upJson.url, publicId: upJson.publicId })
       toast({ title: "Uploaded & Extracted", description: `Fields filled from ${file.name}` })
     } catch (e: any) {
       toast({ title: "Upload/Extract failed", description: e?.message || "Try again.", variant: "destructive" })
@@ -277,7 +323,8 @@ export function DocumentSection({
         const res = await fetch("/api/extract", { method: "POST", body: fd })
         const json = await res.json()
         if (!res.ok) throw new Error(json?.error || "Extraction failed")
-        onChange({ ...value, ...(json?.data || {}), imageUrl: upJson.previewUrl || upJson.url, publicId: upJson.publicId })
+        const extracted = stripManualOnly(type, json?.data)
+        onChange({ ...value, ...extracted, imageUrl: upJson.previewUrl || upJson.url, publicId: upJson.publicId })
         toast({ title: "Cropped & Re-extracted", description: `Fields updated from cropped image` })
       } else {
         onChange({ ...value, imageUrl: upJson.previewUrl || upJson.url, publicId: upJson.publicId })
@@ -344,20 +391,20 @@ export function DocumentSection({
                   const fieldId = `${type}-${k}`
                   return (
                     <>
-                      <Label htmlFor={fieldId}>{labelize(k)}</Label>
+                      <Label htmlFor={fieldId}>{displayLabel(k)}</Label>
                       {isTextarea(k) ? (
                         <Textarea
                           id={fieldId}
                           value={value?.[k] || ""}
                           onChange={(e) => onChange({ ...value, [k]: e.target.value })}
-                          placeholder={`Enter ${labelize(k).toLowerCase()}`}
+                          placeholder={`Enter ${displayLabel(k)}`}
                         />
                       ) : (
                         <Input
                           id={fieldId}
                           value={value?.[k] || ""}
                           onChange={(e) => onChange({ ...value, [k]: e.target.value })}
-                          placeholder={`Enter ${labelize(k).toLowerCase()}`}
+                          placeholder={`Enter ${displayLabel(k)}`}
                         />
                       )}
                     </>
@@ -365,30 +412,6 @@ export function DocumentSection({
                 })()}
               </div>
             ))}
-            {type === "pan" ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="pan-mobileNumber">Mobile Number</Label>
-                  <Input
-                    id="pan-mobileNumber"
-                    type="tel"
-                    value={value?.mobileNumber || ""}
-                    onChange={(e) => onChange({ ...value, mobileNumber: e.target.value })}
-                    placeholder="Enter mobile number"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pan-email">Email</Label>
-                  <Input
-                    id="pan-email"
-                    type="email"
-                    value={value?.email || ""}
-                    onChange={(e) => onChange({ ...value, email: e.target.value })}
-                    placeholder="Enter email"
-                  />
-                </div>
-              </>
-            ) : null}
           </div>
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

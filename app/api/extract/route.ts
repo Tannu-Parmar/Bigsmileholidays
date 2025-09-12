@@ -31,6 +31,9 @@ const DOC_SCHEMAS = {
     motherName: z.string().optional(),
     spouseName: z.string().optional(),
     address: z.string().optional(),
+    email: z.string().optional(),
+    mobileNumber: z.string().optional(),
+    // The following fields are manual-only: ref, ff6E, ffEK, ffEY, ffSQ, ffAI
   }),
   aadhar: z.object({
     aadhaarNumber: z.string().optional(),
@@ -49,6 +52,28 @@ const DOC_SCHEMAS = {
 
 type DocType = keyof typeof DOC_SCHEMAS
 
+// Resiliency helpers mirrored from classify endpoint
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function isUrlReachable(url: string) {
+  try {
+    const res = await fetch(url, { method: "HEAD", cache: "no-store" })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function ensureUrlReady(url: string, attempts = 3, baseDelayMs = 500) {
+  if (/^data:/i.test(url)) return
+  for (let i = 0; i < attempts; i++) {
+    if (await isUrlReachable(url)) return
+    await wait(baseDelayMs * Math.pow(2, i))
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData()
@@ -65,26 +90,42 @@ export async function POST(req: NextRequest) {
       dataUrl = `data:${file.type};base64,${base64}`
     }
 
+    // Warm up remote URLs to avoid transient empty responses
+    if (/^https?:/i.test(dataUrl)) {
+      await ensureUrlReady(dataUrl, 3, 400)
+    }
+
     const schema = DOC_SCHEMAS[type]
-    const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
-      schema,
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a precise OCR assistant. Extract only clean text for the requested fields. Use yyyy-mm-dd for dates when visible. Omit fields you cannot find. For Indian passports: 'surname' is the top-right Surname label and is the lastName; 'givenNames' is the Given Names line; set firstName to the first token of 'givenNames'.",
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: `Extract fields for ${type.replaceAll("_", " ")} from this image.` },
-            { type: "image", image: dataUrl },
-          ],
-        },
-      ],
-    })
+    let object: unknown = {}
+    try {
+      const result = await generateObject({
+        model: openai("gpt-4o-mini"),
+        schema,
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a precise OCR assistant. Extract only clean text for the requested fields. Use yyyy-mm-dd for dates when visible. Omit fields you cannot find. For Indian passports: 'surname' is the top-right Surname label and is the lastName; 'givenNames' is the Given Names line; set firstName to the first token of 'givenNames'.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: `Extract fields for ${type.replaceAll("_", " ")} from this image.` },
+              { type: "image", image: dataUrl },
+            ],
+          },
+        ],
+      })
+      object = result.object
+    } catch (e: any) {
+      if (e?.name === "AI_NoObjectGeneratedError" || /did not match schema/i.test(String(e?.message))) {
+        // Fall back to empty object so the endpoint still succeeds
+        object = {}
+      } else {
+        throw e
+      }
+    }
 
     // Normalize names for passports so UI fields auto-fill correctly
     const data: Record<string, any> = { ...(object as any) }
@@ -101,6 +142,21 @@ export async function POST(req: NextRequest) {
       if (rawSurname) {
         data.lastName = rawSurname
       }
+    }
+
+    // Ensure manual-only fields are never populated by extraction
+    if (type === "passport_back") {
+      delete data.ref
+      delete data.ff6E
+      delete data.ffEK
+      delete data.ffEY
+      delete data.ffSQ
+      delete data.ffAI
+    }
+
+    // Include the imageUrl we used so downstream can store it if desired
+    if (dataUrl) {
+      data.imageUrl = dataUrl
     }
 
     return Response.json({ data })

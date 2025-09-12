@@ -66,7 +66,9 @@ export default function HomePage() {
     <main className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl md:text-2xl font-semibold text-balance">Document OCR Uploader</h1>
+          <div className="flex flex-col">
+            <h1 className="text-xl md:text-2xl font-semibold text-balance">Document OCR Uploader</h1>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export") }>
               <FileSpreadsheet className="h-4 w-4 mr-2" />

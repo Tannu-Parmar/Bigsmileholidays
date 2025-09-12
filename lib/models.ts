@@ -26,6 +26,14 @@ const PassportBackSchema = new Schema(
     spouseName: String,
     address: String,
     imageUrl: String,
+    email: String,
+    mobileNumber: String,
+    ref: String,
+    ff6E: String,
+    ffEK: String,
+    ffEY: String,
+    ffSQ: String,
+    ffAI: String,
   },
   { _id: false },
 )
@@ -49,8 +57,6 @@ const PanSchema = new Schema(
     fatherName: String,
     dateOfBirth: String,
     imageUrl: String,
-    email: String,
-    mobileNumber: String,
   },
   { _id: false },
 )
