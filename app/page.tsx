@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { FileSpreadsheet, Send } from "lucide-react"
+import { BigSmileLogo } from "@/components/big-smile-logo"
 
 type AnyObj = Record<string, any>
 
@@ -63,11 +64,11 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
+    <main className="min-h-screen">
+      <header className="sticky top-0 z-10 bg-gradient-to-r from-[#1B5E20]/90 via-[#4CAF50]/80 to-[#FFEB3B]/60 backdrop-blur supports-[backdrop-filter]:bg-opacity-90">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-          <div className="flex flex-col">
-            <h1 className="text-xl md:text-2xl font-semibold text-balance">Document OCR Uploader</h1>
+          <div className="flex items-center gap-3">
+            <BigSmileLogo size="xl" imageSrc="/logo1.jpeg" showText={false} />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export") }>
