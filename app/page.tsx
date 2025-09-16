@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { DocumentSection } from "@/components/document-section"
+import { DocumentSection, PhotoSection } from "@/components/document-section"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
@@ -15,6 +15,7 @@ export default function HomePage() {
   const [passportBack, setPassportBack] = useState<AnyObj>({})
   const [aadhar, setAadhar] = useState<AnyObj>({})
   const [pan, setPan] = useState<AnyObj>({})
+  const [photo, setPhoto] = useState<AnyObj>({})
   const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
 
@@ -26,6 +27,7 @@ export default function HomePage() {
         passport_back: passportBack,
         aadhar,
         pan,
+        photo,
       }
       const res = await fetch("/api/submit", {
         method: "POST",
@@ -35,20 +37,6 @@ export default function HomePage() {
       const json = await res.json()
       
       if (!res.ok) throw new Error(json?.error || "Save failed")
-
-      // Delete uploaded images from Cloudinary now that we've saved data
-      // const publicIds = [passportFront?.publicId, passportBack?.publicId, aadhar?.publicId, pan?.publicId].filter(Boolean) as string[]
-      // if (publicIds.length) {
-      //   await Promise.all(
-      //     publicIds.map((pid) =>
-      //       fetch("/api/upload", {
-      //         method: "DELETE",
-      //         headers: { "Content-Type": "application/json" },
-      //         body: JSON.stringify({ publicId: pid }),
-      //       }).catch(() => undefined),
-      //     ),
-      //   )
-      // }
 
       toast({ title: "Saved", description: "Record stored; images removed." })
       // Excel master file is saved automatically. Use Export button when needed.
@@ -60,6 +48,7 @@ export default function HomePage() {
       setPassportBack({})
       setAadhar({})
       setPan({})
+      setPhoto({})
     }
   }
 
@@ -99,6 +88,8 @@ export default function HomePage() {
           <DocumentSection type="passport_back" value={passportBack} onChange={setPassportBack} />
           <DocumentSection type="aadhar" value={aadhar} onChange={setAadhar} />
           <DocumentSection type="pan" value={pan} onChange={setPan} />
+          {/* New: traveler photo card */}
+          <PhotoSection value={photo} onChange={setPhoto} />
         </div>
         <div className="flex items-center justify-end">
           <Button onClick={handleSubmit} disabled={submitting}>
@@ -108,14 +99,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* <footer className="mx-auto max-w-6xl px-4 pb-10 pt-4">
-        <div className="flex items-center justify-end">
-          <Button onClick={handleSubmit} disabled={submitting}>
-            <Send className="h-6 w-6 mr-2" />
-            {submitting ? "Submitting..." : "Submit"}
-          </Button>
-        </div>
-      </footer> */}
     </main>
   )
 }

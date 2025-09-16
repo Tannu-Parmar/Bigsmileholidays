@@ -61,15 +61,28 @@ const PanSchema = new Schema(
   { _id: false },
 )
 
+// New: simple photo-only schema
+const PhotoSchema = new Schema(
+  {
+    imageUrl: String,
+    publicId: String,
+  },
+  { _id: false },
+)
+
 const DocumentSetSchema = new Schema(
   {
     passport_front: PassportFrontSchema,
     passport_back: PassportBackSchema,
     aadhar: AadharSchema,
     pan: PanSchema,
+    // New: standalone traveler photo
+    photo: PhotoSchema,
   },
   { timestamps: true },
 )
 
 export type DocumentSet = mongoose.InferSchemaType<typeof DocumentSetSchema>
-export const DocumentSetModel = models.DocumentSet || model("DocumentSet", DocumentSetSchema)
+
+export const DocumentSetModel =
+  (models.DocumentSet as mongoose.Model<DocumentSet>) || model<DocumentSet>("DocumentSet", DocumentSetSchema)

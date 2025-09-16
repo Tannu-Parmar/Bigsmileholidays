@@ -416,7 +416,7 @@ export function DocumentSection({
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Extracting fields...
+              Processing...
             </div>
           ) : null}
         </CardContent>
@@ -468,4 +468,223 @@ export function DocumentSection({
       </Dialog>
     </>
   ) 
+}
+
+export function PhotoSection({ value, onChange }: { value: AnyObj; onChange: (v: AnyObj) => void }) {
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [imageUrl, setImageUrl] = useState<string | null>(value?.imageUrl || null)
+  const [publicId, setPublicId] = useState<string | null>(value?.publicId || null)
+  const [zoom, setZoom] = useState(1)
+  const [rotation, setRotation] = useState(0)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [crop, setCrop] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [cropZoom, setCropZoom] = useState(1)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<{
+    width: number
+    height: number
+    x: number
+    y: number
+  } | null>(null)
+  const [cropBusy, setCropBusy] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const { toast } = useToast()
+
+  function getRadianAngle(degreeValue: number) {
+    return (degreeValue * Math.PI) / 180
+  }
+
+  async function getCroppedImg(
+    imageSrc: string,
+    pixelCrop: { x: number; y: number; width: number; height: number },
+    rotationDeg = 0,
+  ): Promise<Blob> {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = imageSrc
+    })
+
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    if (!ctx) throw new Error("Canvas not supported")
+
+    const rotation = getRadianAngle(rotationDeg)
+    const { width: bBoxWidth, height: bBoxHeight } = {
+      width: Math.abs(Math.cos(rotation) * image.width) + Math.abs(Math.sin(rotation) * image.height),
+      height: Math.abs(Math.sin(rotation) * image.width) + Math.abs(Math.cos(rotation) * image.height),
+    }
+
+    canvas.width = pixelCrop.width
+    canvas.height = pixelCrop.height
+
+    ctx.translate(-pixelCrop.x, -pixelCrop.y)
+    ctx.translate(bBoxWidth / 2, bBoxHeight / 2)
+    ctx.rotate(rotation)
+    ctx.translate(-image.width / 2, -image.height / 2)
+    ctx.drawImage(image, 0, 0)
+
+    return await new Promise<Blob>((resolve) => {
+      canvas.toBlob((blob) => resolve(blob as Blob), "image/jpeg", 0.95)
+    })
+  }
+
+  async function onFile(file: File) {
+    try {
+      setLoading(true)
+      setFileName(file.name)
+      const up = new FormData()
+      up.append("file", file)
+      up.append("folder", "id-ocr-docs/photo")
+      const upRes = await fetch("/api/upload", { method: "POST", body: up })
+      const upJson = await upRes.json()
+      if (!upRes.ok) throw new Error(upJson?.error || "Upload failed")
+      const url = upJson.previewUrl || upJson.url
+      setImageUrl(url)
+      setPublicId(upJson.publicId)
+      setZoom(1)
+      setRotation(0)
+      onChange({ ...value, imageUrl: url, publicId: upJson.publicId })
+      toast({ title: "Photo uploaded", description: file.name })
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e?.message || "Try again.", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function onCropComplete(_: any, areaPixels: { width: number; height: number; x: number; y: number }) {
+    setCroppedAreaPixels(areaPixels)
+  }
+
+  async function applyCrop() {
+    if (!imageUrl || !croppedAreaPixels) return
+    try {
+      setCropBusy(true)
+      setLoading(true)
+      const blob = await getCroppedImg(imageUrl, croppedAreaPixels, rotation)
+      const croppedFile = new File([blob], `photo-cropped-${fileName || "photo"}.jpg`, { type: "image/jpeg" })
+
+      // Optional: remove previous upload
+      try {
+        if (publicId) await fetch("/api/upload", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publicId }) })
+      } catch {}
+
+      const up = new FormData()
+      up.append("file", croppedFile)
+      up.append("folder", "id-ocr-docs/photo")
+      const upRes = await fetch("/api/upload", { method: "POST", body: up })
+      const upJson = await upRes.json()
+      if (!upRes.ok) throw new Error(upJson?.error || "Crop upload failed")
+
+      const url = upJson.previewUrl || upJson.url
+      setImageUrl(url)
+      setPublicId(upJson.publicId)
+      setZoom(1)
+      setCropOpen(false)
+      onChange({ ...value, imageUrl: url, publicId: upJson.publicId })
+      toast({ title: "Cropped", description: `Applied crop to photo` })
+    } catch (e: any) {
+      toast({ title: "Crop failed", description: e?.message || "Try again.", variant: "destructive" })
+    } finally {
+      setCropBusy(false)
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card className="h-full">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Passport Size Photo</CardTitle>
+        {fileName ? <span className="text-xs text-muted-foreground">From: {fileName}</span> : null}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!imageUrl ? <FileDrop onFile={onFile} label="Passport Size Photo" accept="image/*" /> : null}
+        {imageUrl ? (
+          <div className="rounded border p-2 text-xs text-muted-foreground space-y-2">
+            <div className="flex items-center justify-between">
+              <div>Preview</div>
+              <div className="flex gap-2">
+                <Button type="button" variant="secondary" onClick={() => setZoom((z) => Math.min(3, z + 0.2))}>Zoom In</Button>
+                <Button type="button" variant="secondary" onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))}>Zoom Out</Button>
+                <Button type="button" variant="secondary" onClick={() => setRotation((r) => (r + 90) % 360)}>Rotate</Button>
+                <Button type="button" variant="secondary" onClick={() => { setCrop({ x: 0, y: 0 }); setCropZoom(1); setCropOpen(true) }}>Crop</Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={async () => {
+                    try {
+                      if (publicId) await fetch("/api/upload", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publicId }) })
+                    } catch {}
+                    setImageUrl(null)
+                    setPublicId(null)
+                    onChange({})
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-auto">
+              <img
+                src={imageUrl}
+                alt={`passport photo preview`}
+                className="mx-auto max-h-72"
+                style={{ transform: `scale(${zoom}) rotate(${rotation}deg)`, transformOrigin: "center" }}
+              />
+            </div>
+          </div>
+        ) : null}
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Processing...
+          </div>
+        ) : null}
+      </CardContent>
+
+      {/* Crop Dialog */}
+      <Dialog open={cropOpen} onOpenChange={setCropOpen}>
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>Crop Image</DialogTitle>
+            <DialogDescription>
+              Drag to adjust the crop box. Use Zoom and Rotation to refine the area.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative h-[360px] w-full bg-muted overflow-hidden rounded">
+              {imageUrl ? (
+                <Cropper
+                  image={imageUrl}
+                  crop={crop}
+                  zoom={cropZoom}
+                  rotation={rotation}
+                  aspect={4 / 3}
+                  onCropChange={setCrop}
+                  onZoomChange={setCropZoom}
+                  onCropComplete={onCropComplete}
+                />
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">Zoom</div>
+              <Slider min={1} max={3} step={0.1} value={[cropZoom]} onValueChange={(v) => setCropZoom(v[0] ?? 1)} />
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">Rotation</div>
+              <Slider min={0} max={360} step={1} value={[rotation]} onValueChange={(v) => setRotation(v[0] ?? 0)} />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="secondary" onClick={() => setCropOpen(false)} disabled={cropBusy}>Cancel</Button>
+            <Button type="button" onClick={applyCrop} disabled={cropBusy}>
+              {cropBusy ? "Applying..." : "Apply Crop"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
 }

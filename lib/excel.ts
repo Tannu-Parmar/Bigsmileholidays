@@ -40,31 +40,27 @@ export const HEADERS = [
 	"Passport Back Image URL",
 	"Aadhaar Image URL",
 	"PAN Image URL",
+	// New column for traveler photo
+	"Traveler Photo URL",
 ]
 
 function ensureWorkbook(): { wb: XLSX.WorkBook; ws: XLSX.WorkSheet } {
 	if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-	if (!fs.existsSync(EXCEL_PATH)) {
-		const wb = XLSX.utils.book_new()
-		const ws = XLSX.utils.aoa_to_sheet([HEADERS])
+	let wb: XLSX.WorkBook
+	let ws: XLSX.WorkSheet
+	if (fs.existsSync(EXCEL_PATH)) {
+		wb = XLSX.readFile(EXCEL_PATH)
+		ws = wb.Sheets[wb.SheetNames[0]]
+		if (!ws) {
+			ws = XLSX.utils.aoa_to_sheet([HEADERS])
+			XLSX.utils.book_append_sheet(wb, ws, "records")
+		}
+	} else {
+		wb = XLSX.utils.book_new()
+		ws = XLSX.utils.aoa_to_sheet([HEADERS])
 		XLSX.utils.book_append_sheet(wb, ws, "records")
 		const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
 		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf))
-	}
-	const wb = XLSX.read(fs.readFileSync(EXCEL_PATH))
-	let ws = wb.Sheets[wb.SheetNames[0]]
-
-	// Ensure header row exists and matches our HEADERS
-	const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
-	const hasHeader = rows.length > 0 && JSON.stringify(rows[0]) === JSON.stringify(HEADERS)
-	if (!hasHeader) {
-		// Rebuild sheet with the new HEADERS; drop the previous first row (assumed old header)
-		const dataRows = rows.length > 0 ? rows.slice(1) : []
-		const newWs = XLSX.utils.aoa_to_sheet([HEADERS, ...dataRows])
-		wb.Sheets[wb.SheetNames[0]] = newWs
-		const buf2 = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
-		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf2))
-		ws = newWs
 	}
 
 	return { wb, ws }
@@ -108,6 +104,8 @@ export function appendRowFromDocument(doc: DocumentSet) {
 			doc.passport_back?.imageUrl || "",
 			doc.aadhar?.imageUrl || "",
 			doc.pan?.imageUrl || "",
+			// New traveler photo
+			doc.photo?.imageUrl || "",
 		]
 
 		const wsRange = XLSX.utils.decode_range(ws['!ref'] as string)
@@ -115,10 +113,8 @@ export function appendRowFromDocument(doc: DocumentSet) {
 		XLSX.utils.sheet_add_aoa(ws, [row], { origin: { r: newRowIndex, c: 0 } })
 		const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
 		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf))
-	} catch (error: any) {
-		console.error("[excel] append error:", error?.message)
-		// Non-critical: do not throw to keep API response successful
 	}
+	catch {}
 }
 
 export function getExcelFileBuffer(): Buffer {
@@ -172,5 +168,7 @@ export function buildRowFromDocument(doc: DocumentSet, sequence: number) {
 		doc.passport_back?.imageUrl || "",
 		doc.aadhar?.imageUrl || "",
 		doc.pan?.imageUrl || "",
+		// New traveler photo
+		doc.photo?.imageUrl || "",
 	]
 } 
