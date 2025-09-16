@@ -2,7 +2,7 @@
 
 interface BigSmileLogoProps {
   className?: string
-  size?: "sm" | "md" | "lg" | "xl"
+  size?: "sm" | "md" | "lg" | "xl" | "2xl"
   tagline?: string
   imageSrc?: string
   showText?: boolean
@@ -14,6 +14,7 @@ export function BigSmileLogo({ className = "", size = "md", tagline = "Holidays 
     md: "h-12",
     lg: "h-16",
     xl: "h-20",
+    "2xl": "h-28",
   }
 
   const textSizeClasses = {
@@ -21,6 +22,7 @@ export function BigSmileLogo({ className = "", size = "md", tagline = "Holidays 
     md: "text-2xl",
     lg: "text-3xl",
     xl: "text-4xl",
+    "2xl": "text-5xl",
   }
 
   const subtextSizeClasses = {
@@ -28,6 +30,7 @@ export function BigSmileLogo({ className = "", size = "md", tagline = "Holidays 
     md: "text-sm",
     lg: "text-base",
     xl: "text-lg",
+    "2xl": "text-xl",
   }
 
   const iconWidthClasses = {
@@ -35,6 +38,7 @@ export function BigSmileLogo({ className = "", size = "md", tagline = "Holidays 
     md: "w-12",
     lg: "w-16",
     xl: "w-20",
+    "2xl": "w-28",
   }
 
   const imageHeightClasses = {
@@ -42,6 +46,7 @@ export function BigSmileLogo({ className = "", size = "md", tagline = "Holidays 
     md: "h-12",
     lg: "h-16",
     xl: "h-20",
+    "2xl": "h-28",
   }
 
   return (
