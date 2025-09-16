@@ -68,7 +68,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-10 bg-gradient-to-r from-[#1B5E20]/90 via-[#4CAF50]/80 to-[#FFEB3B]/60 backdrop-blur supports-[backdrop-filter]:bg-opacity-90">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="h-auto flex items-center gap-3">
-            <BigSmileLogo size="xl" imageSrc="/logo.png" showText={false} />
+            <BigSmileLogo size="2xl" imageSrc="/logo.png" showText={false} />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export") }>
@@ -100,25 +100,22 @@ export default function HomePage() {
           <DocumentSection type="aadhar" value={aadhar} onChange={setAadhar} />
           <DocumentSection type="pan" value={pan} onChange={setPan} />
         </div>
+        <div className="flex items-center justify-end">
+          <Button onClick={handleSubmit} disabled={submitting}>
+            <Send className="h-6 w-6 mr-2" />
+            {submitting ? "Submitting..." : "Submit"}
+          </Button>
+        </div>
       </section>
 
-      <footer className="mx-auto max-w-6xl px-4 pb-10 pt-4">
-        <Card>
-          <CardContent className="py-4 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Tip: You can export Excel anytime.</span>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export")}>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Export Excel
-              </Button>
-              <Button onClick={handleSubmit} disabled={submitting}>
-                <Send className="h-4 w-4 mr-2" />
-                {submitting ? "Submitting..." : "Submit"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </footer>
+      {/* <footer className="mx-auto max-w-6xl px-4 pb-10 pt-4">
+        <div className="flex items-center justify-end">
+          <Button onClick={handleSubmit} disabled={submitting}>
+            <Send className="h-6 w-6 mr-2" />
+            {submitting ? "Submitting..." : "Submit"}
+          </Button>
+        </div>
+      </footer> */}
     </main>
   )
 }
