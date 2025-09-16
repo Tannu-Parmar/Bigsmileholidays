@@ -68,7 +68,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-10 bg-gradient-to-r from-[#1B5E20]/90 via-[#4CAF50]/80 to-[#FFEB3B]/60 backdrop-blur supports-[backdrop-filter]:bg-opacity-90">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="h-auto flex items-center gap-3">
-            <BigSmileLogo size="2xl" imageSrc="/logo.png" showText={false} />
+            <BigSmileLogo size="xl" imageSrc="/logo.png" showText={false} />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export") }>
