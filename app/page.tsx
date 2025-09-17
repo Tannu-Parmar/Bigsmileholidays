@@ -5,10 +5,13 @@ import { DocumentSection, PhotoSection } from "@/components/document-section"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { FileSpreadsheet, Send } from "lucide-react"
+import { FileSpreadsheet, Send, Search } from "lucide-react"
 import { BigSmileLogo } from "@/components/big-smile-logo"
+import { Input } from "@/components/ui/input"
 
 type AnyObj = Record<string, any>
+
+type SearchResult = { sequence: number; document: AnyObj; values: string[] }
 
 export default function HomePage() {
   const [passportFront, setPassportFront] = useState<AnyObj>({})
@@ -17,18 +20,23 @@ export default function HomePage() {
   const [pan, setPan] = useState<AnyObj>({})
   const [photo, setPhoto] = useState<AnyObj>({})
   const [submitting, setSubmitting] = useState(false)
+  const [sequence, setSequence] = useState<number | null>(null)
+  const [query, setQuery] = useState("")
+  const [searching, setSearching] = useState(false)
+  const [results, setResults] = useState<SearchResult[]>([])
   const { toast } = useToast()
 
   async function handleSubmit() {
     try {
       setSubmitting(true)
-      const payload = {
+      const payload: AnyObj = {
         passport_front: passportFront,
         passport_back: passportBack,
         aadhar,
         pan,
         photo,
       }
+      if (sequence && sequence > 0) payload.sequence = sequence
       const res = await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -38,8 +46,7 @@ export default function HomePage() {
       
       if (!res.ok) throw new Error(json?.error || "Save failed")
 
-      toast({ title: "Saved", description: "Record stored; images removed." })
-      // Excel master file is saved automatically. Use Export button when needed.
+      toast({ title: "Saved", description: sequence ? `Row #${sequence} updated.` : "Record stored; images removed." })
     } catch (e: any) {
       toast({ title: "Submit failed", description: e?.message || "Try again.", variant: "destructive" })
     } finally {
@@ -49,7 +56,40 @@ export default function HomePage() {
       setAadhar({})
       setPan({})
       setPhoto({})
+      setSequence(null)
+      setResults([])
+      setQuery("")
     }
+  }
+
+  async function handleSearch() {
+    try {
+      const q = query.trim()
+      if (!q) return
+      setSearching(true)
+      const res = await fetch(`/api/sheets/search?q=${encodeURIComponent(q)}`)
+      const json = await res.json()
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Search failed")
+      setResults(json.results || [])
+      if ((json.results || []).length === 0) {
+        toast({ title: "No matches", description: "Type a broader value (name, mobile, passport no)." })
+      }
+    } catch (e: any) {
+      toast({ title: "Search error", description: e?.message || "Try again.", variant: "destructive" })
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  function loadResult(r: SearchResult) {
+    const doc = r.document || {}
+    setPassportFront(doc.passport_front || {})
+    setPassportBack(doc.passport_back || {})
+    setAadhar(doc.aadhar || {})
+    setPan(doc.pan || {})
+    setPhoto(doc.photo || {})
+    setSequence(r.sequence)
+    toast({ title: "Loaded from sheet", description: `Editing row #${r.sequence}` })
   }
 
   return (
@@ -66,7 +106,7 @@ export default function HomePage() {
             </Button>
             <Button onClick={handleSubmit} disabled={submitting}>
               <Send className="h-4 w-4 mr-2" />
-              {submitting ? "Submitting..." : "Submit"}
+              {submitting ? "Submitting..." : (sequence ? "Update" : "Submit")}
             </Button>
           </div>
         </div>
@@ -77,9 +117,30 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle className="text-balance">Upload and Extract Details</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Upload images for Passport Front & Back, Aadhaar, and PAN. The AI will pre-fill fields; review and edit if
-            needed. Submit to store in MongoDB and append to the Excel export.
+          <CardContent className="space-y-3">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Input placeholder="Search by name, mobile, passport, PAN, REF..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }} />
+                <Button type="button" variant="secondary" onClick={handleSearch} disabled={searching}>
+                  <Search className="h-4 w-4 mr-2" />
+                  {searching ? "Searching..." : "Search"}
+                </Button>
+              </div>
+              {results.length > 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  {results.slice(0, 5).map((r, idx) => (
+                    <button key={idx} className="block w-full text-left px-3 py-1.5 rounded hover:bg-muted" onClick={() => loadResult(r)}>
+                      Row #{r.sequence}: {(r.values || []).filter(Boolean).slice(0, 4).join(" • ")}
+                    </button>
+                  ))}
+                  {results.length > 5 ? <div className="px-3 py-1.5">+{results.length - 5} more</div> : null}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Upload images for Passport Front & Back, Aadhaar, and PAN. The AI will pre-fill fields; review and edit if needed. Submit to store in Data and append to the Excel export.
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -94,7 +155,7 @@ export default function HomePage() {
         <div className="flex items-center justify-end">
           <Button onClick={handleSubmit} disabled={submitting}>
             <Send className="h-6 w-6 mr-2" />
-            {submitting ? "Submitting..." : "Submit"}
+            {submitting ? "Submitting..." : (sequence ? "Update" : "Submit")}
           </Button>
         </div>
       </section>

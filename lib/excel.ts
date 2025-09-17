@@ -171,4 +171,17 @@ export function buildRowFromDocument(doc: DocumentSet, sequence: number) {
 		// New traveler photo
 		doc.photo?.imageUrl || "",
 	]
+}
+
+// New: update an existing row by sequence number (1-indexed for data rows)
+export function updateRowFromDocument(sequence: number, doc: DocumentSet) {
+	try {
+		const { wb, ws } = ensureWorkbook()
+		// Row index in sheet: +1 header, + (sequence)
+		const rowIndex = 1 + sequence // A2 = seq 1
+		const row = buildRowFromDocument(doc, sequence)
+		XLSX.utils.sheet_add_aoa(ws, [row], { origin: { r: rowIndex, c: 0 } })
+		const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
+		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf))
+	} catch {}
 } 

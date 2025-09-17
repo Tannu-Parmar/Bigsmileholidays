@@ -126,13 +126,18 @@ export function DocumentSection({
   const [cropBusy, setCropBusy] = useState(false)
 
   useEffect(() => {
-    if (!value?.imageUrl) {
-      setImageUrl(null)
-      setPublicId(null)
-      setZoom(1)
-      setRotation(0)
+    // Sync from parent value when it changes (e.g., after search load)
+    if (value?.imageUrl) {
+      setImageUrl(value.imageUrl)
+      setPublicId(value.publicId || null)
+      return
     }
-  }, [value?.imageUrl])
+    // If no imageUrl in value, clear local state
+    setImageUrl(null)
+    setPublicId(null)
+    setZoom(1)
+    setRotation(0)
+  }, [value?.imageUrl, value?.publicId])
 
   function getRadianAngle(degreeValue: number) {
     return (degreeValue * Math.PI) / 180
@@ -273,7 +278,8 @@ export function DocumentSection({
       if (!res.ok) throw new Error(json?.error || "Extraction failed")
 
       const extracted = stripManualOnly(type, json?.data)
-      onChange({ ...value, ...extracted, imageUrl: upJson.previewUrl || upJson.url, publicId: upJson.publicId })
+      const finalImageUrl = detectedPageUrl || upJson.previewUrl || upJson.url
+      onChange({ ...value, ...extracted, imageUrl: finalImageUrl, publicId: upJson.publicId })
       toast({ title: "Uploaded & Extracted", description: `Fields filled from ${file.name}` })
     } catch (e: any) {
       toast({ title: "Upload/Extract failed", description: e?.message || "Try again.", variant: "destructive" })
@@ -368,6 +374,8 @@ export function DocumentSection({
                       } catch {}
                       setImageUrl(null)
                       setPublicId(null)
+                      // Clear all related extracted fields when image is removed
+                      onChange({})
                     }}
                   >
                     Remove
@@ -488,6 +496,19 @@ export function PhotoSection({ value, onChange }: { value: AnyObj; onChange: (v:
   const [cropBusy, setCropBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
+
+  // Sync from parent when search result loads
+  useEffect(() => {
+    if (value?.imageUrl) {
+      setImageUrl(value.imageUrl)
+      setPublicId(value.publicId || null)
+      return
+    }
+    setImageUrl(null)
+    setPublicId(null)
+    setZoom(1)
+    setRotation(0)
+  }, [value?.imageUrl, value?.publicId])
 
   function getRadianAngle(degreeValue: number) {
     return (degreeValue * Math.PI) / 180
@@ -619,6 +640,7 @@ export function PhotoSection({ value, onChange }: { value: AnyObj; onChange: (v:
                     } catch {}
                     setImageUrl(null)
                     setPublicId(null)
+                    // Clear related fields when image removed
                     onChange({})
                   }}
                 >

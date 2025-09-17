@@ -135,4 +135,111 @@ export async function appendDocumentToSheet(doc: DocumentSet, sheetNameParam?: s
 		valueInputOption: "RAW",
 		requestBody: { values: [row] },
 	})
+}
+
+// New: find and update helpers
+function columnNumberToA1Column(n: number): string {
+	let result = ""
+	let num = n
+	while (num > 0) {
+		num--
+		result = String.fromCharCode(65 + (num % 26)) + result
+		num = Math.floor(num / 26)
+	}
+	return result
+}
+
+export type SheetMatch = { sequence: number; rowIndex: number; values: string[] }
+
+export async function findRowsByQuery(query: string, sheetNameParam?: string): Promise<SheetMatch[]> {
+	const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
+	if (!spreadsheetId) throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not set")
+	const auth = getAuth()
+	const desiredTitle = sheetNameParam || process.env.GOOGLE_SHEETS_SHEET_NAME || "records"
+	const { title } = await getOrCreateSheet(spreadsheetId, desiredTitle, auth)
+	const sheets = getSheetsClient(auth)
+	const lastColLetter = columnNumberToA1Column(HEADERS.length)
+	const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${title}!A2:${lastColLetter}` })
+	const rows: string[][] = (resp.data.values as any) || []
+	const q = query.trim().toLowerCase()
+	const matches: SheetMatch[] = []
+	rows.forEach((vals, idx) => {
+		const seqStr = vals[0] || ""
+		const hay = vals.join(" \u0001 ").toLowerCase()
+		if (q && hay.includes(q)) {
+			const sequence = Number(seqStr) || (idx + 1)
+			matches.push({ sequence, rowIndex: idx + 2, values: vals })
+		}
+	})
+	return matches
+}
+
+export function mapRowToDocument(values: string[]): DocumentSet {
+	// Align strictly with HEADERS ordering. Only map fields that have a dedicated column.
+	return {
+		pan: {
+			panNumber: values[1] || "",
+			name: values[25] || "",
+			fatherName: "",
+			dateOfBirth: "",
+			imageUrl: values[30] || "",
+		} as any,
+		aadhar: {
+			aadhaarNumber: values[2] || "",
+			name: values[3] || "",
+			// Sheet stores a single DOB column; use it if present, else blank
+			dateOfBirth: values[9] || "",
+			// No dedicated gender/address columns for Aadhaar in sheet; keep blank
+			gender: "",
+			address: "",
+			imageUrl: values[29] || "",
+		} as any,
+		passport_front: {
+			sex: values[4] || "",
+			firstName: values[5] || "",
+			lastName: values[6] || "",
+			passportNumber: values[7] || "",
+			nationality: values[8] || "",
+			dateOfBirth: values[9] || "",
+			dateOfIssue: values[10] || "",
+			dateOfExpiry: values[11] || "",
+			placeOfBirth: values[23] || "",
+			placeOfIssue: values[24] || "",
+			imageUrl: values[27] || "",
+		} as any,
+		passport_back: {
+			fatherName: values[20] || "",
+			motherName: values[21] || "",
+			spouseName: values[22] || "",
+			address: values[26] || "",
+			email: values[13] || "",
+			mobileNumber: values[12] || "",
+			ref: values[14] || "",
+			ff6E: values[15] || "",
+			ffEK: values[16] || "",
+			ffEY: values[17] || "",
+			ffSQ: values[18] || "",
+			ffAI: values[19] || "",
+			imageUrl: values[28] || "",
+		} as any,
+		photo: { imageUrl: values[31] || "" } as any,
+	} as any
+}
+
+export async function updateRowFromDocument(sequence: number, doc: DocumentSet, sheetNameParam?: string) {
+	const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
+	if (!spreadsheetId) throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not set")
+	const auth = getAuth()
+	const desiredTitle = sheetNameParam || process.env.GOOGLE_SHEETS_SHEET_NAME || "records"
+	const { title } = await getOrCreateSheet(spreadsheetId, desiredTitle, auth)
+	const sheets = getSheetsClient(auth)
+	const lastColLetter = columnNumberToA1Column(HEADERS.length)
+	const row = buildRowFromDocument(doc, sequence)
+	const range = `${title}!A${sequence + 1}:${lastColLetter}${sequence + 1}`
+	await sheets.spreadsheets.values.update({
+		spreadsheetId,
+		range,
+		valueInputOption: "RAW",
+		requestBody: { values: [row] },
+	})
 } 
