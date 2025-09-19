@@ -5,7 +5,7 @@ import { DocumentSection, PhotoSection } from "@/components/document-section"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { FileSpreadsheet, Send, Search } from "lucide-react"
+import { FileSpreadsheet, Send, Search, Lock, Unlock, Eye, EyeOff } from "lucide-react"
 import { BigSmileLogo } from "@/components/big-smile-logo"
 import { Input } from "@/components/ui/input"
 
@@ -24,7 +24,28 @@ export default function HomePage() {
   const [query, setQuery] = useState("")
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState<SearchResult[]>([])
+  const [unlocked, setUnlocked] = useState<boolean>(false)
+  const [password, setPassword] = useState<string>("")
+  const [showPassword, setShowPassword] = useState<boolean>(false)
   const { toast } = useToast()
+
+  function getAuthHeaders() {
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (password) headers["x-app-pass"] = password
+    return headers
+  }
+
+  async function handleUnlock() {
+    try {
+      const test = await fetch(`/api/sheets/search?q=${encodeURIComponent("_healthcheck_")}`, { headers: { "x-app-pass": password } })
+      if (test.status === 401) throw new Error("Invalid password")
+      setUnlocked(true)
+      toast({ title: "Unlocked", description: "You can now search and submit." })
+    } catch (e: any) {
+      setUnlocked(false)
+      toast({ title: "Access denied", description: e?.message || "Invalid password", variant: "destructive" })
+    }
+  }
 
   async function handleSubmit() {
     try {
@@ -39,13 +60,11 @@ export default function HomePage() {
       if (sequence && sequence > 0) payload.sequence = sequence
       const res = await fetch("/api/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload),
       })
       const json = await res.json()
-      
       if (!res.ok) throw new Error(json?.error || "Save failed")
-
       toast({ title: "Saved", description: sequence ? `Row #${sequence} updated.` : "Record stored; images removed." })
     } catch (e: any) {
       toast({ title: "Submit failed", description: e?.message || "Try again.", variant: "destructive" })
@@ -64,10 +83,14 @@ export default function HomePage() {
 
   async function handleSearch() {
     try {
+      if (!unlocked) {
+        toast({ title: "Locked", description: "Enter the password to unlock first." })
+        return
+      }
       const q = query.trim()
       if (!q) return
       setSearching(true)
-      const res = await fetch(`/api/sheets/search?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`/api/sheets/search?q=${encodeURIComponent(q)}`, { headers: { "x-app-pass": password } })
       const json = await res.json()
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Search failed")
       setResults(json.results || [])
@@ -100,7 +123,30 @@ export default function HomePage() {
             <BigSmileLogo size="xl" imageSrc="/logo.png" showText={false} />
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export") }>
+            <div className="flex items-center gap-2">
+              <div className="relative w-40">
+                <Input
+                  placeholder="Password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <Button type="button" variant={unlocked ? "secondary" : "default"} onClick={handleUnlock}>
+                {unlocked ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                {unlocked ? "Unlocked" : "Unlock"}
+              </Button>
+            </div>
+            <Button variant="outline" onClick={() => (window.location.href = process.env.NEXT_PUBLIC_SHEET_URL || "/api/export") } disabled={!unlocked}>
               <FileSpreadsheet className="h-4 w-4 mr-2" />
               Open Spreadsheet
             </Button>
@@ -121,7 +167,7 @@ export default function HomePage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <Input placeholder="Search by name, mobile, passport, PAN, REF..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }} />
-                <Button type="button" variant="secondary" onClick={handleSearch} disabled={searching}>
+                <Button type="button" variant="secondary" onClick={handleSearch} disabled={searching || !unlocked}>
                   <Search className="h-4 w-4 mr-2" />
                   {searching ? "Searching..." : "Search"}
                 </Button>
@@ -137,7 +183,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Upload images for Passport Front & Back, Aadhaar, and PAN. The AI will pre-fill fields; review and edit if needed. Submit to store in Data and append to the Excel export.
+                  Upload images for Passport Front & Back, Aadhaar, and PAN. The AI will pre-fill fields; review and edit if needed. Submit to store in Data and append to the Excel export. 
                 </div>
               )}
             </div>
