@@ -27,6 +27,7 @@ export default function HomePage() {
   const [unlocked, setUnlocked] = useState<boolean>(false)
   const [password, setPassword] = useState<string>("")
   const [showPassword, setShowPassword] = useState<boolean>(false)
+  const [passwordError, setPasswordError] = useState<string>("")
   const { toast } = useToast()
 
   function getAuthHeaders() {
@@ -38,12 +39,14 @@ export default function HomePage() {
   async function handleUnlock() {
     try {
       const test = await fetch(`/api/sheets/search?q=${encodeURIComponent("_healthcheck_")}`, { headers: { "x-app-pass": password } })
-      if (test.status === 401) throw new Error("Invalid password")
+      if (test.status === 401) throw new Error("Password is wrong")
       setUnlocked(true)
+      setPasswordError("")
       toast({ title: "Unlocked", description: "You can now search and submit." })
     } catch (e: any) {
       setUnlocked(false)
-      toast({ title: "Access denied", description: e?.message || "Invalid password", variant: "destructive" })
+      setPasswordError("Password is wrong")
+      toast({ title: "Password is wrong", variant: "destructive" })
     }
   }
 
@@ -129,9 +132,14 @@ export default function HomePage() {
                   placeholder="Password"
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError("") }}
                   className="pr-9"
                 />
+                {passwordError ? (
+                  <div className="absolute -bottom-5 left-0 w-full text-xs text-destructive">
+                    {passwordError}
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   aria-label={showPassword ? "Hide password" : "Show password"}
