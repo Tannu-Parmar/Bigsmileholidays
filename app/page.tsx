@@ -52,6 +52,17 @@ export default function HomePage() {
 
   async function handleSubmit() {
     try {
+      // Prevent submission if everything is empty
+      const isEmptyObject = (obj: AnyObj | null | undefined) => {
+        if (!obj || typeof obj !== "object") return true
+        return Object.values(obj).every((v) => v === undefined || v === null || String(v).trim() === "")
+      }
+      const allEmpty = [passportFront, passportBack, aadhar, pan, photo].every(isEmptyObject)
+      if (allEmpty) {
+        toast({ title: "Nothing to submit", description: "Please fill at least one field or upload an image.", variant: "destructive" })
+        return
+      }
+
       setSubmitting(true)
       const payload: AnyObj = {
         passport_front: passportFront,

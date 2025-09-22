@@ -17,6 +17,16 @@ export async function POST(req: NextRequest) {
 		// Remove sequence before DB create to keep schema clean
 		if ("sequence" in payload) delete payload.sequence
 
+		// Reject if all sections are empty
+		const isEmptyObject = (obj: any) => {
+			if (!obj || typeof obj !== "object") return true
+			return Object.values(obj).every((v) => v === undefined || v === null || String(v).trim?.() === "")
+		}
+		const sections = [payload.passport_front, payload.passport_back, payload.aadhar, payload.pan, payload.photo]
+		if (sections.every(isEmptyObject)) {
+			return Response.json({ ok: false, error: "No data provided. Fill any field or upload an image." }, { status: 400 })
+		}
+
 		try {
 			await dbConnect()
 			const created = await DocumentSetModel.create(payload)
