@@ -344,6 +344,15 @@ export function DocumentSection({
     }
   }
 
+  // Sync with parent clears (e.g., after successful submit)
+  useEffect(() => {
+    if (!value?.imageUrl) {
+      setImageUrl(null)
+      setPublicId(null)
+      setFileName(null)
+    }
+  }, [value?.imageUrl])
+
   return (
     <>
       <Card className="h-full">
@@ -613,6 +622,15 @@ export function PhotoSection({ value, onChange }: { value: AnyObj; onChange: (v:
       setLoading(false)
     }
   }
+
+  // Sync with parent clears (e.g., after successful submit)
+  useEffect(() => {
+    if (!value?.imageUrl) {
+      setImageUrl(null)
+      setPublicId(null)
+      setFileName(null)
+    }
+  }, [value?.imageUrl])
 
   return (
     <Card className="h-full">

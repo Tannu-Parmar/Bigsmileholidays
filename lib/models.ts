@@ -70,6 +70,18 @@ const PhotoSchema = new Schema(
   { _id: false },
 )
 
+// Payment information schema
+const PaymentSchema = new Schema(
+  {
+    paymentDone: { type: Boolean, required: true },
+    amount: { type: Number, default: 0 },
+    paymentId: String,
+    transactionReference: String,
+    bypassPasswordUsed: { type: Boolean, default: false },
+  },
+  { _id: false },
+)
+
 const DocumentSetSchema = new Schema(
   {
     passport_front: PassportFrontSchema,
@@ -78,6 +90,8 @@ const DocumentSetSchema = new Schema(
     pan: PanSchema,
     // New: standalone traveler photo
     photo: PhotoSchema,
+    // Payment information
+    payment: PaymentSchema,
   },
   { timestamps: true },
 )

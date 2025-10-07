@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { DocumentSection, PhotoSection } from "@/components/document-section"
+import { PaymentComponent } from "@/components/payment-component"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { FileSpreadsheet, Send, Search, Lock, Unlock, Eye, EyeOff } from "lucide-react"
+import { FileSpreadsheet, Send, Search, Lock, Unlock, Eye, EyeOff, CreditCard } from "lucide-react"
 import { BigSmileLogo } from "@/components/big-smile-logo"
 import { Input } from "@/components/ui/input"
 
@@ -28,6 +29,8 @@ export default function HomePage() {
   const [password, setPassword] = useState<string>("")
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [passwordError, setPasswordError] = useState<string>("")
+  const [showPayment, setShowPayment] = useState(false)
+  const [paymentData, setPaymentData] = useState<any>(null)
   const { toast } = useToast()
 
   function getAuthHeaders() {
@@ -50,7 +53,28 @@ export default function HomePage() {
     }
   }
 
-  async function handleSubmit() {
+  function handlePaymentSuccess(paymentInfo: any) {
+    setPaymentData(paymentInfo)
+    setShowPayment(false)
+    toast({
+      title: "Payment Successful",
+      description: paymentInfo.bypassPasswordUsed 
+        ? "Payment bypassed successfully" 
+        : `Payment of ₹${paymentInfo.amount} completed`,
+    })
+    // Auto-submit immediately after successful payment
+    submitWith(paymentInfo)
+  }
+
+  function handlePaymentError(error: string) {
+    toast({
+      title: "Payment Failed",
+      description: error,
+      variant: "destructive",
+    })
+  }
+
+  async function submitWith(paymentInfo: any) {
     try {
       // Prevent submission if everything is empty
       const isEmptyObject = (obj: AnyObj | null | undefined) => {
@@ -70,6 +94,7 @@ export default function HomePage() {
         aadhar,
         pan,
         photo,
+        payment: paymentInfo,
       }
       if (sequence && sequence > 0) payload.sequence = sequence
       const res = await fetch("/api/submit", {
@@ -92,7 +117,33 @@ export default function HomePage() {
       setSequence(null)
       setResults([])
       setQuery("")
+      setPaymentData(null)
     }
+  }
+
+  async function handleSubmit() {
+    // Prevent opening payment when form is empty
+    const isEmptyObject = (obj: AnyObj | null | undefined) => {
+      if (!obj || typeof obj !== "object") return true
+      return Object.values(obj).every((v) => v === undefined || v === null || String(v).trim?.() === "")
+    }
+    const allEmpty = [passportFront, passportBack, aadhar, pan, photo].every(isEmptyObject)
+    if (allEmpty) {
+      toast({ title: "Nothing to submit", description: "Please fill at least one field or upload an image.", variant: "destructive" })
+      return
+    }
+    
+    // If unlocked, bypass payment locally
+    if (unlocked) {
+      await submitWith({ paymentDone: true, amount: 0, bypassPasswordUsed: true })
+      return
+    }
+    // If payment is not done yet, open payment modal; otherwise submit with existing payment data
+    if (!paymentData) {
+      setShowPayment(true)
+      return
+    }
+    await submitWith(paymentData)
   }
 
   async function handleSearch() {
@@ -173,6 +224,12 @@ export default function HomePage() {
               <Send className="h-4 w-4 mr-2" />
               {submitting ? "Submitting..." : (sequence ? "Update" : "Submit")}
             </Button>
+            {paymentData && (
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <CreditCard className="h-4 w-4" />
+                {paymentData.bypassPasswordUsed ? "Bypassed" : `Paid ₹${paymentData.amount}`}
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -216,14 +273,121 @@ export default function HomePage() {
           <DocumentSection type="pan" value={pan} onChange={setPan} />
           {/* New: traveler photo card */}
           <PhotoSection value={photo} onChange={setPhoto} />
+          {/* Payment Method Card (hidden when unlocked) */}
+          {!unlocked && (
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Payment Method
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!paymentData ? (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Payment required to submit form
+                    </p>
+                    <p className="text-2xl font-bold text-green-600">
+                      ₹1
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => setShowPayment(true)}
+                    className="w-full"
+                    size="lg"
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Proceed to Payment
+                  </Button>
+                  <div className="text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowPayment(true)}
+                      className="text-xs text-muted-foreground"
+                    >
+                      <Lock className="h-3 w-3 mr-1" />
+                      Admin Bypass
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
+                      <CreditCard className="h-5 w-5" />
+                      <span className="font-semibold">Payment Completed</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {paymentData.bypassPasswordUsed ? "Payment bypassed using admin password" : `Amount paid: ₹${paymentData.amount}`}
+                    </p>
+                    {paymentData.paymentId && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Payment ID: {paymentData.paymentId}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPaymentData(null)
+                      toast({
+                        title: "Payment Reset",
+                        description: "You can now proceed with a new payment.",
+                      })
+                    }}
+                    className="w-full"
+                  >
+                    Reset Payment
+                  </Button>
+                </div>
+              )}
+              <div className="text-xs text-muted-foreground text-center">
+                <p>Secure payment powered by Razorpay</p>
+              </div>
+            </CardContent>
+          </Card>
+          )}
         </div>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {paymentData && (
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <CreditCard className="h-4 w-4" />
+                {paymentData.bypassPasswordUsed ? "Payment Bypassed" : `Payment: ₹${paymentData.amount}`}
+              </div>
+            )}
+          </div>
           <Button onClick={handleSubmit} disabled={submitting}>
             <Send className="h-6 w-6 mr-2" />
             {submitting ? "Submitting..." : (sequence ? "Update" : "Submit")}
           </Button>
         </div>
       </section>
+
+      {/* Payment Modal (hidden when unlocked) */}
+      {!unlocked && showPayment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg max-w-md w-full">
+            <PaymentComponent
+              amount={1} // Set your desired amount here
+              onPaymentSuccess={handlePaymentSuccess}
+              onPaymentError={handlePaymentError}
+            />
+            <div className="p-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowPayment(false)}
+                className="w-full"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   )

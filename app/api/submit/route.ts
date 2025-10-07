@@ -9,6 +9,8 @@ export const runtime = "nodejs"
 export async function POST(req: NextRequest) {
 	try {
 		const payload = await req.json()
+		const appPass = req.headers.get("x-app-pass") || ""
+		const canBypassPayment = !!process.env.APP_ACCESS_PASSWORD && appPass === process.env.APP_ACCESS_PASSWORD
 		if (!payload || typeof payload !== "object") {
 			return Response.json({ ok: false, error: "Invalid payload" }, { status: 400 })
 		}
@@ -25,6 +27,17 @@ export async function POST(req: NextRequest) {
 		const sections = [payload.passport_front, payload.passport_back, payload.aadhar, payload.pan, payload.photo]
 		if (sections.every(isEmptyObject)) {
 			return Response.json({ ok: false, error: "No data provided. Fill any field or upload an image." }, { status: 400 })
+		}
+
+		// Check if payment is required and validate payment information
+		let paymentInfo = payload.payment
+		if (!paymentInfo || !paymentInfo.paymentDone) {
+			if (canBypassPayment) {
+				paymentInfo = { paymentDone: true, amount: 0, bypassPasswordUsed: true }
+				payload.payment = paymentInfo
+			} else {
+				return Response.json({ ok: false, error: "Payment is required to submit the form." }, { status: 400 })
+			}
 		}
 
 		try {
@@ -54,7 +67,28 @@ export async function POST(req: NextRequest) {
 
 			return Response.json({ ok: true })
 		} catch (e: any) {
-			return Response.json({ ok: false, error: e?.message || "Save failed" }, { status: 500 })
+			// Fallback: even if DB save fails, try to write to Excel (and Sheets) so data isn't lost
+			try {
+				if (sequence && sequence > 0) {
+					updateExcelRow(sequence, payload)
+				} else {
+					appendRowFromDocument(payload)
+				}
+			} catch (excelErr: any) {
+				console.error("[submit:fallback] excel write failed:", excelErr?.message)
+			}
+
+			try {
+				if (sequence && sequence > 0) {
+					await updateSheetsRow(sequence, payload)
+				} else {
+					await appendDocumentToSheet(payload)
+				}
+			} catch (sheetsErr: any) {
+				console.error("[submit:fallback] sheets write failed:", sheetsErr?.message)
+			}
+
+			return Response.json({ ok: false, error: e?.message || "Save failed (excel fallback attempted)" }, { status: 500 })
 		}
 	} catch (e: any) {
 		return Response.json({ ok: false, error: e?.message || "Invalid request" }, { status: 400 })

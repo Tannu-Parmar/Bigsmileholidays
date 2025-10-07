@@ -7,6 +7,7 @@ const isVercel = !!process.env.VERCEL
 const baseDir = isVercel ? (process.env.TMPDIR || "/tmp") : process.cwd()
 const DATA_DIR = path.join(baseDir, "data")
 const EXCEL_PATH = path.join(DATA_DIR, "records.xlsx")
+const EXCEL_TMP_PATH = path.join(DATA_DIR, "records.xlsx.tmp")
 
 export const HEADERS = [
 	"NO",
@@ -42,6 +43,8 @@ export const HEADERS = [
 	"PAN Image URL",
 	// New column for traveler photo
 	"Traveler Photo URL",
+	// Payment status
+	"Payment Complete",
 ]
 
 function ensureWorkbook(): { wb: XLSX.WorkBook; ws: XLSX.WorkSheet } {
@@ -59,11 +62,49 @@ function ensureWorkbook(): { wb: XLSX.WorkBook; ws: XLSX.WorkSheet } {
 		wb = XLSX.utils.book_new()
 		ws = XLSX.utils.aoa_to_sheet([HEADERS])
 		XLSX.utils.book_append_sheet(wb, ws, "records")
-		const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
-		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf))
+        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
+        writeExcelBufferWithRetry(Buffer.from(buf))
 	}
 
 	return { wb, ws }
+}
+
+function sleep(ms: number) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+function writeExcelBufferWithRetry(buffer: Buffer, options?: { attempts?: number; delayMs?: number }) {
+    const attempts = options?.attempts ?? 5
+    const baseDelayMs = options?.delayMs ?? 150
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            // Write to a temp file first to minimize lock window, then rename atomically
+            fs.writeFileSync(EXCEL_TMP_PATH, buffer)
+            fs.renameSync(EXCEL_TMP_PATH, EXCEL_PATH)
+            return
+        } catch (err: any) {
+            const code = err?.code
+            const isLockLike = code === "EBUSY" || code === "EPERM" || code === "EACCES" || code === "ETXTBSY"
+            // Clean up temp file if it exists
+            try { if (fs.existsSync(EXCEL_TMP_PATH)) fs.unlinkSync(EXCEL_TMP_PATH) } catch {}
+            if (attempt < attempts && isLockLike) {
+                const jitter = Math.floor(Math.random() * 100)
+                sleep(baseDelayMs * attempt + jitter)
+                continue
+            }
+            throw err
+        }
+    }
+}
+
+function paymentCell(payment: any): string {
+    if (payment?.bypassPasswordUsed) return "Admin"
+    if (payment?.paymentDone) {
+        const amount = Number(payment?.amount)
+        return Number.isFinite(amount) && amount > 0 ? `Yes / ₹${amount}` : "Yes"
+    }
+    return "No"
 }
 
 export function appendRowFromDocument(doc: DocumentSet) {
@@ -106,15 +147,21 @@ export function appendRowFromDocument(doc: DocumentSet) {
 			doc.pan?.imageUrl || "",
 			// New traveler photo
 			doc.photo?.imageUrl || "",
+			// Payment status
+			paymentCell((doc as any).payment),
 		]
 
 		const wsRange = XLSX.utils.decode_range(ws['!ref'] as string)
 		const newRowIndex = wsRange.e.r + 1
 		XLSX.utils.sheet_add_aoa(ws, [row], { origin: { r: newRowIndex, c: 0 } })
-		const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
-		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf))
-	}
-	catch {}
+        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
+        writeExcelBufferWithRetry(Buffer.from(buf))
+        // Basic success log for debugging
+        console.log(`[excel] appended row #${seq} to`, EXCEL_PATH)
+    }
+    catch (err: any) {
+        console.error("[excel] append failed:", err?.message || err)
+    }
 }
 
 export function getExcelFileBuffer(): Buffer {
@@ -170,6 +217,8 @@ export function buildRowFromDocument(doc: DocumentSet, sequence: number) {
 		doc.pan?.imageUrl || "",
 		// New traveler photo
 		doc.photo?.imageUrl || "",
+		// Payment status
+		paymentCell((doc as any).payment),
 	]
 }
 
@@ -181,7 +230,10 @@ export function updateRowFromDocument(sequence: number, doc: DocumentSet) {
 		const rowIndex = 1 + sequence // A2 = seq 1
 		const row = buildRowFromDocument(doc, sequence)
 		XLSX.utils.sheet_add_aoa(ws, [row], { origin: { r: rowIndex, c: 0 } })
-		const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
-		fs.writeFileSync(EXCEL_PATH, Buffer.from(buf))
-	} catch {}
+        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
+        writeExcelBufferWithRetry(Buffer.from(buf))
+        console.log(`[excel] updated row #${sequence} at`, EXCEL_PATH)
+    } catch (err: any) {
+        console.error("[excel] update failed:", err?.message || err)
+    }
 } 
