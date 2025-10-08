@@ -290,7 +290,7 @@ export default function HomePage() {
                       Payment required to submit form
                     </p>
                     <p className="text-2xl font-bold text-green-600">
-                      ₹1
+                      ₹25
                     </p>
                   </div>
                   <Button
@@ -372,7 +372,7 @@ export default function HomePage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-background rounded-lg max-w-md w-full">
             <PaymentComponent
-              amount={1} // Set your desired amount here
+              amount={25} // Set your desired amount here
               onPaymentSuccess={handlePaymentSuccess}
               onPaymentError={handlePaymentError}
             />
