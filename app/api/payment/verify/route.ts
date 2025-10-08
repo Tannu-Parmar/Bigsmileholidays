@@ -4,14 +4,21 @@ import crypto from "crypto"
 
 export const runtime = "nodejs"
 
-// Initialize Razorpay instance
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-})
-
 export async function POST(req: NextRequest) {
   try {
+    // Check if Razorpay is configured
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      return Response.json(
+        { error: "Razorpay not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET environment variables." },
+        { status: 500 }
+      )
+    }
+
+    // Initialize Razorpay instance inside the function
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    })
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = await req.json()
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -21,7 +28,7 @@ export async function POST(req: NextRequest) {
     // Create signature
     const body = razorpay_order_id + "|" + razorpay_payment_id
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body.toString())
       .digest("hex")
 

@@ -3,12 +3,6 @@ import Razorpay from "razorpay"
 
 export const runtime = "nodejs"
 
-// Initialize Razorpay instance
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-})
-
 export async function POST(req: NextRequest) {
   try {
     // Check if Razorpay is configured
@@ -18,6 +12,12 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       )
     }
+
+    // Initialize Razorpay instance inside the function
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    })
 
     const { amount, currency = "INR", receipt } = await req.json()
 
