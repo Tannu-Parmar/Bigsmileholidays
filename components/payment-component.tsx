@@ -26,7 +26,7 @@ interface PaymentComponentProps {
   onPaymentError: (error: string) => void
 }
 
-const BYPASS_PASSWORD = "Bigsmile@2504" // This should match your environment variable
+const BYPASS_PASSWORD = process.env.NEXT_PUBLIC_BYPASS_PASSWORD || "Bigsmile@2504"
 
 export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: PaymentComponentProps) {
   const [showBypassPassword, setShowBypassPassword] = useState(false)

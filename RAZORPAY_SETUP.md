@@ -32,7 +32,7 @@ NEXT_PUBLIC_RAZORPAY_KEY_ID=your_razorpay_key_id
 
 ## Bypass Password
 
-The bypass password is currently set to: `Bigsmile@2504`
+The bypass password is currently set to: `[REDACTED - check your environment variables]`
 
 To change it, update the `BYPASS_PASSWORD` constant in `components/payment-component.tsx`
 
