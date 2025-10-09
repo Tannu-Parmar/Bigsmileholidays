@@ -60,6 +60,8 @@ export default function HomePage() {
       title: "Payment Successful",
       description: paymentInfo.bypassPasswordUsed 
         ? "Payment bypassed successfully" 
+        : paymentInfo.promoCodeUsed
+        ? `Payment completed using promo code ${paymentInfo.promoCode}`
         : `Payment of ₹${paymentInfo.amount} completed`,
     })
     // Auto-submit immediately after successful payment
@@ -253,10 +255,14 @@ export default function HomePage() {
               <Send className="h-4 w-4 mr-2" />
               {submitting ? "Submitting..." : (sequence ? "Update" : "Submit")}
             </Button>
-            {paymentData && (
+                {paymentData && (
               <div className="flex items-center gap-2 text-sm text-green-600">
                 <CreditCard className="h-4 w-4" />
-                {paymentData.bypassPasswordUsed ? "Bypassed" : `Paid ₹${paymentData.amount}`}
+                {paymentData.bypassPasswordUsed 
+                  ? "Bypassed" 
+                  : paymentData.promoCodeUsed
+                  ? `Free (${paymentData.promoCode})`
+                  : `Paid ₹${paymentData.amount}`}
               </div>
             )}
           </div>
@@ -350,7 +356,11 @@ export default function HomePage() {
                       <span className="font-semibold">Payment Completed</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {paymentData.bypassPasswordUsed ? "Payment bypassed using admin password" : `Amount paid: ₹${paymentData.amount}`}
+                      {paymentData.bypassPasswordUsed 
+                        ? "Payment bypassed using admin password" 
+                        : paymentData.promoCodeUsed
+                        ? `Payment completed using promo code: ${paymentData.promoCode}`
+                        : `Amount paid: ₹${paymentData.amount}`}
                     </p>
                     {paymentData.paymentId && (
                       <p className="text-xs text-muted-foreground mt-1">
@@ -385,7 +395,11 @@ export default function HomePage() {
             {paymentData && (
               <div className="flex items-center gap-2 text-sm text-green-600">
                 <CreditCard className="h-4 w-4" />
-                {paymentData.bypassPasswordUsed ? "Payment Bypassed" : `Payment: ₹${paymentData.amount}`}
+                {paymentData.bypassPasswordUsed 
+                  ? "Payment Bypassed" 
+                  : paymentData.promoCodeUsed
+                  ? `Free (${paymentData.promoCode})`
+                  : `Payment: ₹${paymentData.amount}`}
               </div>
             )}
           </div>

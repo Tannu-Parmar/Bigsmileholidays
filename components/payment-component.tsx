@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { CreditCard, Eye, EyeOff, Lock, Unlock } from "lucide-react"
+import { CreditCard, Eye, EyeOff, Lock, Unlock, Tag, CheckCircle } from "lucide-react"
 
 declare global {
   interface Window {
@@ -22,11 +22,16 @@ interface PaymentComponentProps {
     paymentId?: string
     transactionReference?: string
     bypassPasswordUsed: boolean
+    promoCodeUsed?: boolean
+    promoCode?: string
   }) => void
   onPaymentError: (error: string) => void
 }
 
 const BYPASS_PASSWORD = process.env.NEXT_PUBLIC_BYPASS_PASSWORD || "Bigsmile@2504"
+const PROMO_CODES = {
+  "BIG123": { valid: true, discount: 100 },
+}
 
 export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: PaymentComponentProps) {
   const [showBypassPassword, setShowBypassPassword] = useState(false)
@@ -34,7 +39,60 @@ export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: P
   const [isProcessing, setIsProcessing] = useState(false)
   const [bypassMode, setBypassMode] = useState(false)
   const [bypassError, setBypassError] = useState("")
+  const [promoCode, setPromoCode] = useState("")
+  const [promoError, setPromoError] = useState("")
+  const [appliedPromo, setAppliedPromo] = useState<string | null>(null)
+  const [showPromoSection, setShowPromoSection] = useState(false)
   const { toast } = useToast()
+
+  const validatePromoCode = (code: string) => {
+    const upperCode = code.toUpperCase().trim()
+    return PROMO_CODES[upperCode as keyof typeof PROMO_CODES]
+  }
+
+  const handlePromoCodeSubmit = async () => {
+    try {
+      const response = await fetch("/api/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCode }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.ok) {
+        setPromoError("Invalid promo code")
+        toast({ title: "Invalid Promo Code", description: "Please check the code and try again.", variant: "destructive" })
+        return
+      }
+      
+      setAppliedPromo(data.code)
+      setPromoError("")
+      toast({ 
+        title: "Promo Code Applied!", 
+        description: `You got ${data.discount}% off! ${data.discount === 100 ? 'Payment is now free!' : ''}` 
+      })
+    } catch (error) {
+      setPromoError("Failed to validate promo code")
+      toast({ title: "Error", description: "Failed to validate promo code. Please try again.", variant: "destructive" })
+    }
+  }
+
+  const removePromoCode = () => {
+    setAppliedPromo(null)
+    setPromoCode("")
+    setPromoError("")
+    toast({ title: "Promo Code Removed", description: "You can apply a new code if needed." })
+  }
+
+  const getFinalAmount = () => {
+    if (!appliedPromo) return amount
+    // For display purposes, we'll use the client-side validation
+    // The actual validation happens server-side during payment
+    const promo = validatePromoCode(appliedPromo)
+    if (!promo) return amount
+    return Math.max(0, amount - (amount * promo.discount / 100))
+  }
 
   const loadRazorpayScript = (): Promise<void> => {
     return new Promise((resolve) => {
@@ -60,6 +118,13 @@ export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: P
       return
     }
 
+    // Check if promo code makes payment free
+    const finalAmount = getFinalAmount()
+    if (finalAmount === 0 && appliedPromo) {
+      handlePromoPayment()
+      return
+    }
+
     // Check if Razorpay is configured
     if (!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID === 'rzp_test_your_key_id_here') {
       toast({
@@ -80,7 +145,7 @@ export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: P
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: amount,
+          amount: finalAmount,
           currency: "INR",
           receipt: `receipt_${Date.now()}`,
         }),
@@ -124,6 +189,8 @@ export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: P
               paymentId: verifyData.paymentId,
               transactionReference: verifyData.transactionReference,
               bypassPasswordUsed: false,
+              promoCodeUsed: !!appliedPromo,
+              promoCode: appliedPromo || undefined,
             })
 
             toast({
@@ -151,6 +218,21 @@ export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: P
       setIsProcessing(false)
       onPaymentError(error.message || "Payment failed")
     }
+  }
+
+  const handlePromoPayment = () => {
+    onPaymentSuccess({
+      paymentDone: true,
+      amount: 0,
+      bypassPasswordUsed: false,
+      promoCodeUsed: true,
+      promoCode: appliedPromo || undefined,
+    })
+
+    toast({
+      title: "Payment Completed",
+      description: `Payment completed using promo code ${appliedPromo}. Form will be submitted automatically.`,
+    })
   }
 
   const handleBypassPayment = () => {
@@ -191,10 +273,80 @@ export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: P
           <p className="text-sm text-muted-foreground mb-2">
             Complete payment to submit your form
           </p>
-          <p className="text-2xl font-bold text-green-600">
-            ₹{amount}
-          </p>
+          <div className="space-y-2">
+            {appliedPromo ? (
+              <div className="space-y-1">
+                <div className="flex items-center justify-center gap-2 text-green-600">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Promo Code Applied: {appliedPromo}</span>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <p className="text-lg text-muted-foreground line-through">₹{amount}</p>
+                  <p className="text-2xl font-bold text-green-600">₹{getFinalAmount()}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={removePromoCode}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Remove Code
+                </Button>
+              </div>
+            ) : (
+              <p className="text-2xl font-bold text-green-600">₹{getFinalAmount()}</p>
+            )}
+          </div>
         </div>
+
+        {/* Promo Code Section */}
+        {!appliedPromo && (
+          <div className="space-y-3">
+            {!showPromoSection ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowPromoSection(true)}
+                className="w-full text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Tag className="h-3 w-3 mr-1" />
+                Have a promo code?
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="promo-code" className="text-xs">Promo Code</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="promo-code"
+                    placeholder="Enter promo code"
+                    value={promoCode}
+                    onChange={(e) => { setPromoCode(e.target.value); if (promoError) setPromoError("") }}
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={handlePromoCodeSubmit}
+                    disabled={!promoCode.trim()}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Apply
+                  </Button>
+                </div>
+                {promoError && (
+                  <div className="text-xs text-destructive">{promoError}</div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPromoSection(false)}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {!bypassMode ? (
           <div className="space-y-3">
@@ -204,7 +356,7 @@ export function PaymentComponent({ amount, onPaymentSuccess, onPaymentError }: P
               className="w-full"
               size="lg"
             >
-              {isProcessing ? "Processing..." : `Pay ₹${amount}`}
+              {isProcessing ? "Processing..." : getFinalAmount() === 0 ? "Submit Free" : `Pay ₹${getFinalAmount()}`}
             </Button>
             
             <div className="relative">

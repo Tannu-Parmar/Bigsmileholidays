@@ -40,6 +40,11 @@ export async function POST(req: NextRequest) {
 			}
 		}
 
+		// Log promo code usage for tracking
+		if (paymentInfo.promoCodeUsed && paymentInfo.promoCode) {
+			console.log(`[submit] Promo code used: ${paymentInfo.promoCode} by user`)
+		}
+
 		// Check for duplicate records before saving
 		// Only check if this is a new submission (not an update)
 		if (!sequence || sequence <= 0) {
