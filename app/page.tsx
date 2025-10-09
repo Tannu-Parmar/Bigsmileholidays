@@ -103,12 +103,37 @@ export default function HomePage() {
         body: JSON.stringify(payload),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || "Save failed")
-      toast({ title: "Saved", description: sequence ? `Row #${sequence} updated.` : "Record stored; images removed." })
-    } catch (e: any) {
-      toast({ title: "Submit failed", description: e?.message || "Try again.", variant: "destructive" })
-    } finally {
-      setSubmitting(false)
+      
+      if (!res.ok) {
+        // Check if it's a duplicate user error (HTTP 409)
+        if (res.status === 409) {
+          toast({ 
+            title: "User already exists", 
+            description: json?.error || "This record already exists in the system.",
+            variant: "destructive"
+          })
+          // Clear form data after showing duplicate error popup
+          setPassportFront({})
+          setPassportBack({})
+          setAadhar({})
+          setPan({})
+          setPhoto({})
+          setSequence(null)
+          setResults([])
+          setQuery("")
+          setPaymentData(null)
+          return
+        }
+        throw new Error(json?.error || "Save failed")
+      }
+      
+      // Success message
+      toast({ 
+        title: "Record saved successfully", 
+        description: sequence ? `Row #${sequence} updated successfully.` : "New record has been saved to the Excel file." 
+      })
+      
+      // Clear form data only on successful submission
       setPassportFront({})
       setPassportBack({})
       setAadhar({})
@@ -118,6 +143,10 @@ export default function HomePage() {
       setResults([])
       setQuery("")
       setPaymentData(null)
+    } catch (e: any) {
+      toast({ title: "Submit failed", description: e?.message || "Try again.", variant: "destructive" })
+    } finally {
+      setSubmitting(false)
     }
   }
 

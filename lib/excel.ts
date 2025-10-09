@@ -236,4 +236,48 @@ export function updateRowFromDocument(sequence: number, doc: DocumentSet) {
     } catch (err: any) {
         console.error("[excel] update failed:", err?.message || err)
     }
+}
+
+// Check for duplicate records in Excel file
+export function checkForDuplicates(doc: DocumentSet): { hasDuplicate: boolean; duplicateField?: string; duplicateValue?: string } {
+	try {
+		const { ws } = ensureWorkbook()
+		const existing = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
+		
+		// Skip header row (index 0)
+		const dataRows = existing.slice(1)
+		
+		const passportNumber = doc.passport_front?.passportNumber?.trim()
+		const aadhaarNumber = doc.aadhar?.aadhaarNumber?.trim()
+		const panNumber = doc.pan?.panNumber?.trim()
+		
+		// Check each data row for duplicates
+		for (const row of dataRows) {
+			// Column indices: Passport No. (7), Aadhaar Number (2), PAN Number (1)
+			const existingPassport = row[7]?.trim()
+			const existingAadhaar = row[2]?.trim()
+			const existingPAN = row[1]?.trim()
+			
+			// Check for Passport Number duplicate
+			if (passportNumber && existingPassport && passportNumber === existingPassport) {
+				return { hasDuplicate: true, duplicateField: "Passport Number", duplicateValue: passportNumber }
+			}
+			
+			// Check for Aadhaar Number duplicate
+			if (aadhaarNumber && existingAadhaar && aadhaarNumber === existingAadhaar) {
+				return { hasDuplicate: true, duplicateField: "Aadhaar Number", duplicateValue: aadhaarNumber }
+			}
+			
+			// Check for PAN Number duplicate
+			if (panNumber && existingPAN && panNumber === existingPAN) {
+				return { hasDuplicate: true, duplicateField: "PAN Number", duplicateValue: panNumber }
+			}
+		}
+		
+		return { hasDuplicate: false }
+	} catch (err: any) {
+		console.error("[excel] duplicate check failed:", err?.message || err)
+		// Return no duplicate on error to avoid blocking submissions
+		return { hasDuplicate: false }
+	}
 } 

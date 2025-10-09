@@ -242,4 +242,57 @@ export async function updateRowFromDocument(sequence: number, doc: DocumentSet, 
 		valueInputOption: "RAW",
 		requestBody: { values: [row] },
 	})
+}
+
+// Check for duplicate records in Google Sheets
+export async function checkForDuplicatesInSheets(doc: DocumentSet, sheetNameParam?: string): Promise<{ hasDuplicate: boolean; duplicateField?: string; duplicateValue?: string }> {
+	try {
+		const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
+		if (!spreadsheetId) throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not set")
+		const auth = getAuth()
+		const desiredTitle = sheetNameParam || process.env.GOOGLE_SHEETS_SHEET_NAME || "records"
+		const { title } = await getOrCreateSheet(spreadsheetId, desiredTitle, auth)
+		const sheets = getSheetsClient(auth)
+		const lastColLetter = columnNumberToA1Column(HEADERS.length)
+		
+		// Get all data rows (skip header)
+		const resp = await sheets.spreadsheets.values.get({ 
+			spreadsheetId, 
+			range: `${title}!A2:${lastColLetter}` 
+		})
+		const rows: string[][] = (resp.data.values as any) || []
+		
+		const passportNumber = doc.passport_front?.passportNumber?.trim()
+		const aadhaarNumber = doc.aadhar?.aadhaarNumber?.trim()
+		const panNumber = doc.pan?.panNumber?.trim()
+		
+		// Check each data row for duplicates
+		for (const row of rows) {
+			// Column indices: Passport No. (7), Aadhaar Number (2), PAN Number (1)
+			const existingPassport = row[7]?.trim()
+			const existingAadhaar = row[2]?.trim()
+			const existingPAN = row[1]?.trim()
+			
+			// Check for Passport Number duplicate
+			if (passportNumber && existingPassport && passportNumber === existingPassport) {
+				return { hasDuplicate: true, duplicateField: "Passport Number", duplicateValue: passportNumber }
+			}
+			
+			// Check for Aadhaar Number duplicate
+			if (aadhaarNumber && existingAadhaar && aadhaarNumber === existingAadhaar) {
+				return { hasDuplicate: true, duplicateField: "Aadhaar Number", duplicateValue: aadhaarNumber }
+			}
+			
+			// Check for PAN Number duplicate
+			if (panNumber && existingPAN && panNumber === existingPAN) {
+				return { hasDuplicate: true, duplicateField: "PAN Number", duplicateValue: panNumber }
+			}
+		}
+		
+		return { hasDuplicate: false }
+	} catch (err: any) {
+		console.error("[sheets] duplicate check failed:", err?.message || err)
+		// Return no duplicate on error to avoid blocking submissions
+		return { hasDuplicate: false }
+	}
 } 
