@@ -49,8 +49,9 @@ const FIELDS: Record<DocType, string[]> = {
     "ff6E",
     "ffEK",
     "ffEY",
-    "ffSQ",
     "ffAI",
+    "ffSQ",
+    "ffQR",
   ],
   aadhar: ["aadhaarNumber", "name", "dateOfBirth", "gender", "address"],
   pan: ["panNumber", "name", "fatherName", "dateOfBirth"],
@@ -72,6 +73,7 @@ const CUSTOM_LABELS: Record<string, string> = {
   ffEY: "FF EY",
   ffSQ: "FF SQ",
   ffAI: "FF AI",
+  ffQR: "FF QR",
 }
 
 function displayLabel(key: string) {
@@ -81,7 +83,17 @@ function displayLabel(key: string) {
 // Manual-only fields must not be auto-filled by extraction
 const MANUAL_ONLY_FIELDS: Record<DocType, Set<string>> = {
   passport_front: new Set<string>([]),
-  passport_back: new Set<string>(["mobileNumber", "email", "ref", "ff6E", "ffEK", "ffEY", "ffSQ", "ffAI"]),
+  passport_back: new Set<string>([
+    "mobileNumber",
+    "email",
+    "ref",
+    "ff6E",
+    "ffEK",
+    "ffEY",
+    "ffSQ",
+    "ffAI",
+    "ffQR",
+  ]),
   aadhar: new Set<string>([]),
   pan: new Set<string>([]),
 }

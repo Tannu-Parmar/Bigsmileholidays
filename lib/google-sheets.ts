@@ -4,6 +4,14 @@ import { HEADERS, buildRowFromDocument } from "./excel"
 
 export type SheetsRow = any[]
 
+function canonicalHeaderKey(value?: string) {
+	return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase()
+}
+
+const canonicalHeaderIndexMap = new Map<string, number>(
+	HEADERS.map((header, idx) => [canonicalHeaderKey(header), idx]),
+)
+
 function getAuth() {
 	const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
 	let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
@@ -150,15 +158,18 @@ function columnNumberToA1Column(n: number): string {
 }
 
 export type SheetMatch = { sequence: number; rowIndex: number; values: string[] }
+export type SheetSearchResult = { matches: SheetMatch[]; headers: string[] }
 
-export async function findRowsByQuery(query: string, sheetNameParam?: string): Promise<SheetMatch[]> {
+export async function findRowsByQuery(query: string, sheetNameParam?: string): Promise<SheetSearchResult> {
 	const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
 	if (!spreadsheetId) throw new Error("GOOGLE_SHEETS_SPREADSHEET_ID is not set")
 	const auth = getAuth()
 	const desiredTitle = sheetNameParam || process.env.GOOGLE_SHEETS_SHEET_NAME || "records"
 	const { title } = await getOrCreateSheet(spreadsheetId, desiredTitle, auth)
 	const sheets = getSheetsClient(auth)
-	const lastColLetter = columnNumberToA1Column(HEADERS.length)
+	const headerResp = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${title}!A1:ZZ1` })
+	const headerRow = (headerResp.data.values?.[0] || []) as string[]
+	const lastColLetter = columnNumberToA1Column(Math.max(HEADERS.length, headerRow.length))
 	const resp = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${title}!A2:${lastColLetter}` })
 	const rows: string[][] = (resp.data.values as any) || []
 	const q = query.trim().toLowerCase()
@@ -171,58 +182,79 @@ export async function findRowsByQuery(query: string, sheetNameParam?: string): P
 			matches.push({ sequence, rowIndex: idx + 2, values: vals })
 		}
 	})
-	return matches
+	return {
+		matches,
+		headers: headerRow.map((value) => (value === undefined || value === null ? "" : String(value))),
+	}
 }
 
-export function mapRowToDocument(values: string[]): DocumentSet {
+export function mapRowToDocument(values: string[], headers?: string[]): DocumentSet {
+	const headerIndexMap = new Map<string, number>()
+	if (headers && headers.length) {
+		headers.forEach((header, idx) => {
+			const key = canonicalHeaderKey(header)
+			if (key) headerIndexMap.set(key, idx)
+		})
+	}
+
+	const lookup = (columnName: string) => {
+		const key = canonicalHeaderKey(columnName)
+		let idx = headerIndexMap.get(key)
+		if (idx === undefined) idx = canonicalHeaderIndexMap.get(key)
+		if (idx === undefined) return ""
+		const value = values[idx]
+		return value === undefined || value === null ? "" : String(value)
+	}
+
 	// Align strictly with HEADERS ordering. Only map fields that have a dedicated column.
 	return {
 		pan: {
-			panNumber: values[1] || "",
-			name: values[25] || "",
+			panNumber: lookup("PAN Number"),
+			name: lookup("PAN Name"),
 			fatherName: "",
 			dateOfBirth: "",
-			imageUrl: values[30] || "",
+			imageUrl: lookup("PAN Image URL"),
 		} as any,
 		aadhar: {
-			aadhaarNumber: values[2] || "",
-			name: values[3] || "",
+			aadhaarNumber: lookup("Aadhaar Number"),
+			name: lookup("Aadhaar Name"),
 			// Sheet stores a single DOB column; use it if present, else blank
-			dateOfBirth: values[9] || "",
+			dateOfBirth: lookup("DOB"),
 			// No dedicated gender/address columns for Aadhaar in sheet; keep blank
 			gender: "",
 			address: "",
-			imageUrl: values[29] || "",
+			imageUrl: lookup("Aadhaar Image URL"),
 		} as any,
 		passport_front: {
-			sex: values[4] || "",
-			firstName: values[5] || "",
-			lastName: values[6] || "",
-			passportNumber: values[7] || "",
-			nationality: values[8] || "",
-			dateOfBirth: values[9] || "",
-			dateOfIssue: values[10] || "",
-			dateOfExpiry: values[11] || "",
-			placeOfBirth: values[23] || "",
-			placeOfIssue: values[24] || "",
-			imageUrl: values[27] || "",
+			sex: lookup("Sex"),
+			firstName: lookup("Full Name (Passport)"),
+			lastName: lookup("Last Name"),
+			passportNumber: lookup("Passport No."),
+			nationality: lookup("Nationality"),
+			dateOfBirth: lookup("DOB"),
+			dateOfIssue: lookup("D.O.Issue"),
+			dateOfExpiry: lookup("D.O.Expire"),
+			placeOfBirth: lookup("Place Of Birth"),
+			placeOfIssue: lookup("Place Of Issue"),
+			imageUrl: lookup("Passport Front Image URL"),
 		} as any,
 		passport_back: {
-			fatherName: values[20] || "",
-			motherName: values[21] || "",
-			spouseName: values[22] || "",
-			address: values[26] || "",
-			email: values[13] || "",
-			mobileNumber: values[12] || "",
-			ref: values[14] || "",
-			ff6E: values[15] || "",
-			ffEK: values[16] || "",
-			ffEY: values[17] || "",
-			ffSQ: values[18] || "",
-			ffAI: values[19] || "",
-			imageUrl: values[28] || "",
+			fatherName: lookup("Father Name"),
+			motherName: lookup("Mother Name"),
+			spouseName: lookup("Spouse Name"),
+			address: lookup("Passport Address"),
+			email: lookup("Email"),
+			mobileNumber: lookup("Mobile Number"),
+			ref: lookup("REF"),
+			ff6E: lookup("FF 6E"),
+			ffEK: lookup("FF EK"),
+			ffEY: lookup("FF EY"),
+			ffSQ: lookup("FF SQ"),
+			ffAI: lookup("FF AI"),
+			ffQR: lookup("FF QR"),
+			imageUrl: lookup("Passport Back Image URL"),
 		} as any,
-		photo: { imageUrl: values[31] || "" } as any,
+		photo: { imageUrl: lookup("Traveler Photo URL") } as any,
 	} as any
 }
 

@@ -17,8 +17,12 @@ export async function GET(req: NextRequest) {
 		const url = new URL(req.url)
 		const q = (url.searchParams.get("q") || "").trim()
 		if (!q) return Response.json({ ok: false, error: "Missing q" }, { status: 400 })
-		const matches = await findRowsByQuery(q)
-		const results = matches.map((m) => ({ sequence: m.sequence, values: m.values, document: mapRowToDocument(m.values) }))
+		const { matches, headers } = await findRowsByQuery(q)
+		const results = matches.map((m) => ({
+			sequence: m.sequence,
+			values: m.values,
+			document: mapRowToDocument(m.values, headers),
+		}))
 		return Response.json({ ok: true, results })
 	} catch (e: any) {
 		return Response.json({ ok: false, error: e?.message || "Search failed" }, { status: 500 })

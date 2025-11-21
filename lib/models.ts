@@ -34,6 +34,7 @@ const PassportBackSchema = new Schema(
     ffEY: String,
     ffSQ: String,
     ffAI: String,
+    ffQR: String,
   },
   { _id: false },
 )

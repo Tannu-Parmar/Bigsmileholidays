@@ -30,6 +30,7 @@ export const HEADERS = [
 	"FF EY",
 	"FF SQ",
 	"FF AI",
+	"FF QR",
 	"Father Name",
 	"Mother Name",
 	"Spouse Name",
@@ -49,23 +50,41 @@ export const HEADERS = [
 
 function ensureWorkbook(): { wb: XLSX.WorkBook; ws: XLSX.WorkSheet } {
 	if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-	let wb: XLSX.WorkBook
-	let ws: XLSX.WorkSheet
-	if (fs.existsSync(EXCEL_PATH)) {
-		wb = XLSX.readFile(EXCEL_PATH)
-		ws = wb.Sheets[wb.SheetNames[0]]
+
+	if (!fs.existsSync(EXCEL_PATH)) {
+		return createWorkbookWithHeaders()
+	}
+
+	try {
+		const stats = fs.statSync(EXCEL_PATH)
+		if (stats.size === 0) {
+			return createWorkbookWithHeaders()
+		}
+	} catch {
+		// If stat fails, rebuild workbook
+		return createWorkbookWithHeaders()
+	}
+
+	try {
+		const wb = XLSX.readFile(EXCEL_PATH)
+		let ws = wb.Sheets[wb.SheetNames[0]]
 		if (!ws) {
 			ws = XLSX.utils.aoa_to_sheet([HEADERS])
 			XLSX.utils.book_append_sheet(wb, ws, "records")
 		}
-	} else {
-		wb = XLSX.utils.book_new()
-		ws = XLSX.utils.aoa_to_sheet([HEADERS])
-		XLSX.utils.book_append_sheet(wb, ws, "records")
-        const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
-        writeExcelBufferWithRetry(Buffer.from(buf))
+		return { wb, ws }
+	} catch (err) {
+		console.error("[excel] failed to read workbook, recreating:", err)
+		return createWorkbookWithHeaders()
 	}
+}
 
+function createWorkbookWithHeaders(): { wb: XLSX.WorkBook; ws: XLSX.WorkSheet } {
+	const wb = XLSX.utils.book_new()
+	const ws = XLSX.utils.aoa_to_sheet([HEADERS])
+	XLSX.utils.book_append_sheet(wb, ws, "records")
+	const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
+	writeExcelBufferWithRetry(Buffer.from(buf))
 	return { wb, ws }
 }
 
@@ -101,10 +120,51 @@ function writeExcelBufferWithRetry(buffer: Buffer, options?: { attempts?: number
 function paymentCell(payment: any): string {
     if (payment?.bypassPasswordUsed) return "Admin"
     if (payment?.paymentDone) {
+        // When payment completed using a promo code, mark explicitly
+        if (payment?.promoCodeUsed) return "Promo Code"
         const amount = Number(payment?.amount)
         return Number.isFinite(amount) && amount > 0 ? `Yes / ₹${amount}` : "Yes"
     }
     return "No"
+}
+
+function normalizeCellValue(value: any): string {
+	return value === undefined || value === null ? "" : String(value)
+}
+
+const COLUMN_GETTERS: Record<string, (doc: DocumentSet) => any> = {
+	"PAN Number": (doc) => doc.pan?.panNumber,
+	"Aadhaar Number": (doc) => doc.aadhar?.aadhaarNumber,
+	"Aadhaar Name": (doc) => doc.aadhar?.name,
+	"Sex": (doc) => doc.passport_front?.sex,
+	"Full Name (Passport)": (doc) => doc.passport_front?.firstName,
+	"Last Name": (doc) => doc.passport_front?.lastName,
+	"Passport No.": (doc) => doc.passport_front?.passportNumber,
+	"Nationality": (doc) => doc.passport_front?.nationality,
+	"DOB": (doc) => doc.passport_front?.dateOfBirth,
+	"D.O.Issue": (doc) => doc.passport_front?.dateOfIssue,
+	"D.O.Expire": (doc) => doc.passport_front?.dateOfExpiry,
+	"Mobile Number": (doc) => (doc as any).passport_back?.mobileNumber,
+	"Email": (doc) => (doc as any).passport_back?.email,
+	"REF": (doc) => (doc as any).passport_back?.ref,
+	"FF 6E": (doc) => (doc as any).passport_back?.ff6E,
+	"FF EK": (doc) => (doc as any).passport_back?.ffEK,
+	"FF EY": (doc) => (doc as any).passport_back?.ffEY,
+	"FF SQ": (doc) => (doc as any).passport_back?.ffSQ,
+	"FF AI": (doc) => (doc as any).passport_back?.ffAI,
+	"FF QR": (doc) => (doc as any).passport_back?.ffQR,
+	"Father Name": (doc) => doc.passport_back?.fatherName,
+	"Mother Name": (doc) => doc.passport_back?.motherName,
+	"Spouse Name": (doc) => doc.passport_back?.spouseName,
+	"Place Of Birth": (doc) => doc.passport_front?.placeOfBirth,
+	"Place Of Issue": (doc) => doc.passport_front?.placeOfIssue,
+	"PAN Name": (doc) => doc.pan?.name,
+	"Passport Address": (doc) => doc.passport_back?.address,
+	"Passport Front Image URL": (doc) => doc.passport_front?.imageUrl,
+	"Passport Back Image URL": (doc) => doc.passport_back?.imageUrl,
+	"Aadhaar Image URL": (doc) => doc.aadhar?.imageUrl,
+	"PAN Image URL": (doc) => doc.pan?.imageUrl,
+	"Traveler Photo URL": (doc) => doc.photo?.imageUrl,
 }
 
 export function appendRowFromDocument(doc: DocumentSet) {
@@ -113,43 +173,7 @@ export function appendRowFromDocument(doc: DocumentSet) {
 		const existing = XLSX.utils.sheet_to_json(ws)
 		const seq = (existing?.length || 0) + 1
 
-		const row = [
-			seq,
-			doc.pan?.panNumber || "",
-			doc.aadhar?.aadhaarNumber || "",
-			doc.aadhar?.name || "",
-			doc.passport_front?.sex || "",
-			doc.passport_front?.firstName || "",
-			doc.passport_front?.lastName || "",
-			doc.passport_front?.passportNumber || "",
-			doc.passport_front?.nationality || "",
-			doc.passport_front?.dateOfBirth || "",
-			doc.passport_front?.dateOfIssue || "",
-			doc.passport_front?.dateOfExpiry || "",
-			((doc as any).passport_back?.mobileNumber) || "",
-			((doc as any).passport_back?.email) || "",
-			((doc as any).passport_back?.ref) || "",
-			((doc as any).passport_back?.ff6E) || "",
-			((doc as any).passport_back?.ffEK) || "",
-			((doc as any).passport_back?.ffEY) || "",
-			((doc as any).passport_back?.ffSQ) || "",
-			((doc as any).passport_back?.ffAI) || "",
-			doc.passport_back?.fatherName || "",
-			doc.passport_back?.motherName || "",
-			doc.passport_back?.spouseName || "",
-			doc.passport_front?.placeOfBirth || "",
-			doc.passport_front?.placeOfIssue || "",
-			doc.pan?.name || "",
-			doc.passport_back?.address || "",
-			doc.passport_front?.imageUrl || "",
-			doc.passport_back?.imageUrl || "",
-			doc.aadhar?.imageUrl || "",
-			doc.pan?.imageUrl || "",
-			// New traveler photo
-			doc.photo?.imageUrl || "",
-			// Payment status
-			paymentCell((doc as any).payment),
-		]
+		const row = buildRowFromDocument(doc, seq)
 
 		const wsRange = XLSX.utils.decode_range(ws['!ref'] as string)
 		const newRowIndex = wsRange.e.r + 1
@@ -183,43 +207,12 @@ export function buildExcelBufferFromDocuments(documents: DocumentSet[]): Buffer 
 }
 
 export function buildRowFromDocument(doc: DocumentSet, sequence: number) {
-	return [
-		sequence,
-		doc.pan?.panNumber || "",
-		doc.aadhar?.aadhaarNumber || "",
-		doc.aadhar?.name || "",
-		doc.passport_front?.sex || "",
-		doc.passport_front?.firstName || "",
-		doc.passport_front?.lastName || "",
-		doc.passport_front?.passportNumber || "",
-		doc.passport_front?.nationality || "",
-		doc.passport_front?.dateOfBirth || "",
-		doc.passport_front?.dateOfIssue || "",
-		doc.passport_front?.dateOfExpiry || "",
-		((doc as any).passport_back?.mobileNumber) || "",
-		((doc as any).passport_back?.email) || "",
-		((doc as any).passport_back?.ref) || "",
-		((doc as any).passport_back?.ff6E) || "",
-		((doc as any).passport_back?.ffEK) || "",
-		((doc as any).passport_back?.ffEY) || "",
-		((doc as any).passport_back?.ffSQ) || "",
-		((doc as any).passport_back?.ffAI) || "",
-		doc.passport_back?.fatherName || "",
-		doc.passport_back?.motherName || "",
-		doc.passport_back?.spouseName || "",
-		doc.passport_front?.placeOfBirth || "",
-		doc.passport_front?.placeOfIssue || "",
-		doc.pan?.name || "",
-		doc.passport_back?.address || "",
-		doc.passport_front?.imageUrl || "",
-		doc.passport_back?.imageUrl || "",
-		doc.aadhar?.imageUrl || "",
-		doc.pan?.imageUrl || "",
-		// New traveler photo
-		doc.photo?.imageUrl || "",
-		// Payment status
-		paymentCell((doc as any).payment),
-	]
+	return HEADERS.map((header) => {
+		if (header === "NO") return sequence
+		if (header === "Payment Complete") return paymentCell((doc as any).payment)
+		const getter = COLUMN_GETTERS[header]
+		return getter ? normalizeCellValue(getter(doc)) : ""
+	})
 }
 
 // New: update an existing row by sequence number (1-indexed for data rows)

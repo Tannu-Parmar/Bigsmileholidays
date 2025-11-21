@@ -33,7 +33,7 @@ const DOC_SCHEMAS = {
     address: z.string().optional(),
     email: z.string().optional(),
     mobileNumber: z.string().optional(),
-    // The following fields are manual-only: ref, ff6E, ffEK, ffEY, ffSQ, ffAI
+    // The following fields are manual-only: ref, ff6E, ffEK, ffEY, ffSQ, ffAI, ffQR
   }),
   aadhar: z.object({
     aadhaarNumber: z.string().optional(),
@@ -152,6 +152,7 @@ export async function POST(req: NextRequest) {
       delete data.ffEY
       delete data.ffSQ
       delete data.ffAI
+      delete data.ffQR
     }
 
     // Include the imageUrl we used so downstream can store it if desired

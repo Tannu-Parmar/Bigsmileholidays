@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   },
 }
 
+const shouldEnableAnalytics =
+  process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === 'true' ||
+  process.env.NODE_ENV === 'production'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -22,7 +26,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} bg-gradient-to-r from-[#1B5E20]/90 via-[#4CAF50]/80 to-[#FFEB3B]/60 bg-fixed min-h-screen`}>
         {children}
-        <Analytics />
+        {shouldEnableAnalytics && <Analytics />}
         <Toaster />
       </body>
     </html>
